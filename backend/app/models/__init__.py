@@ -1,5 +1,27 @@
 # Import every model here so that defining the classes registers their
 # tables in Base.metadata — this is what Alembic autogenerate diffs against.
+from app.models.block import Block
+from app.models.community import Community
+from app.models.connection import Connection
+from app.models.event import Event
+from app.models.interest import Interest, event_interests, user_interests
+from app.models.message import EventMessage
+from app.models.participant import EventParticipant
+from app.models.profile import Profile
+from app.models.report import Report
 from app.models.user import User
 
-__all__ = ["User"]
+__all__ = [
+    "Block",
+    "Community",
+    "Connection",
+    "Event",
+    "EventMessage",
+    "EventParticipant",
+    "Interest",
+    "Profile",
+    "Report",
+    "User",
+    "event_interests",
+    "user_interests",
+]
