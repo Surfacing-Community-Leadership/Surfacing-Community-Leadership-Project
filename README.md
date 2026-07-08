@@ -86,13 +86,17 @@ setup instructions for each part are added here as that part lands.
 
 ## Roadmap
 
-- [ ] Database setup (PostgreSQL + PostGIS)
-- [ ] Backend skeleton (FastAPI app, config, health check)
-- [ ] Async SQLAlchemy + Alembic migrations
-- [ ] Users & JWT authentication (fastapi-users)
-- [ ] Profiles, communities, interests
-- [ ] Events & help requests with geospatial "near me" queries
-- [ ] Participation: RSVPs and invites
-- [ ] Connections, blocks, reports
-- [ ] Event-scoped messaging
+- [x] Database setup (PostgreSQL + PostGIS)
+- [x] Backend skeleton (FastAPI app, config, health check)
+- [x] Async SQLAlchemy + Alembic migrations
+- [x] Users & JWT authentication (fastapi-users)
+- [x] Profiles, communities, interests
+- [x] Events & help requests with geospatial "near me" queries
+- [x] Participation: RSVPs and invites
+- [x] Connections, blocks, reports
+- [x] Event-scoped messaging
+- [ ] Backend hardening: pytest suite, SQLAdmin, rate limiting
 - [ ] Frontend: auth, map, event creation & discovery
+
+Design decisions made along the way are logged in
+[docs/DECISIONS.md](docs/DECISIONS.md).
