@@ -2,22 +2,30 @@ import uuid
 
 from fastapi import Depends
 from fastapi_users import BaseUserManager, FastAPIUsers, UUIDIDMixin
-from fastapi_users.authentication import (
-    AuthenticationBackend,
-    CookieTransport,
-    JWTStrategy,
+from fastapi_users.authentication import AuthenticationBackend, CookieTransport
+from fastapi_users.authentication.strategy.db import (
+    AccessTokenDatabase,
+    DatabaseStrategy,
 )
 from fastapi_users.exceptions import InvalidPasswordException
 from fastapi_users_db_sqlalchemy import SQLAlchemyUserDatabase
+from fastapi_users_db_sqlalchemy.access_token import SQLAlchemyAccessTokenDatabase
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.models import User
+from app.models import AccessToken, User
+
+AUTH_COOKIE_NAME = "ours_auth"
+CSRF_COOKIE_NAME = "ours_csrf"
 
 
 async def get_user_db(session: AsyncSession = Depends(get_db)):
     yield SQLAlchemyUserDatabase(session, User)
+
+
+async def get_access_token_db(session: AsyncSession = Depends(get_db)):
+    yield SQLAlchemyAccessTokenDatabase(session, AccessToken)
 
 
 class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
@@ -41,11 +49,10 @@ async def get_user_manager(
 
 
 # httpOnly cookie: JavaScript can never read the token, which closes the
-# XSS-steals-your-session hole that localStorage tokens have. samesite="lax"
-# stops other sites from riding the cookie on cross-site POSTs (basic CSRF
-# protection; a real CSRF token is the production-grade upgrade).
+# XSS-steals-your-session hole. samesite="lax" plus the CSRF middleware in
+# main.py handle cross-site request forgery.
 cookie_transport = CookieTransport(
-    cookie_name="ours_auth",
+    cookie_name=AUTH_COOKIE_NAME,
     cookie_max_age=settings.access_token_lifetime_seconds,
     cookie_secure=settings.cookie_secure,
     cookie_httponly=True,
@@ -53,17 +60,20 @@ cookie_transport = CookieTransport(
 )
 
 
-def get_jwt_strategy() -> JWTStrategy:
-    return JWTStrategy(
-        secret=settings.secret_key,
-        lifetime_seconds=settings.access_token_lifetime_seconds,
+def get_database_strategy(
+    access_token_db: AccessTokenDatabase[AccessToken] = Depends(get_access_token_db),
+) -> DatabaseStrategy:
+    # Opaque tokens stored server-side: logout deletes the row, so a session
+    # can be truly revoked (unlike a stateless JWT).
+    return DatabaseStrategy(
+        access_token_db, lifetime_seconds=settings.access_token_lifetime_seconds
     )
 
 
 auth_backend = AuthenticationBackend(
-    name="jwt-cookie",
+    name="db-cookie",
     transport=cookie_transport,
-    get_strategy=get_jwt_strategy,
+    get_strategy=get_database_strategy,
 )
 
 fastapi_users = FastAPIUsers[User, uuid.UUID](get_user_manager, [auth_backend])

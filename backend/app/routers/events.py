@@ -8,9 +8,11 @@ from sqlalchemy import and_, func, or_, select
 from app.core.geo import to_latlng, wkt_point
 from app.models import Community, Event, EventParticipant, Interest, event_interests
 from app.routers.deps import (
+    ALLOWED_STATUS_TRANSITIONS,
     CONFIRMED_PARTICIPANT_STATUSES,
     DB,
     CurrentUser,
+    blocked_counterparts,
     get_event_or_404,
     get_my_community_id,
     get_participation,
@@ -82,6 +84,8 @@ async def discover_events(
     community_id: uuid.UUID | None = None,
     from_: Annotated[datetime | None, Query(alias="from")] = None,
     to: Annotated[datetime | None, Query(alias="to")] = None,
+    limit: Annotated[int, Query(gt=0, le=200)] = 200,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ):
     """The map query: visible events within radius_m of (lat, lng),
     nearest first. Defaults to upcoming events only."""
@@ -93,9 +97,18 @@ async def discover_events(
         select(Event, distance)
         .where(func.ST_DWithin(Event.location, point, radius_m))
         .where(_visibility_clause(user.id, my_community_id))
+        # Events hosted by anyone you have a block with disappear entirely.
+        # NULL hosts (account deleted) stay visible — not_in(NULL) is never true.
+        .where(
+            or_(
+                Event.host_id.is_(None),
+                Event.host_id.not_in(blocked_counterparts(user.id)),
+            )
+        )
         .where(Event.status.in_(("open", "full")))
         .order_by(distance)
-        .limit(200)
+        .limit(limit)
+        .offset(offset)
     )
     if kind is not None:
         stmt = stmt.where(Event.kind == kind)
@@ -192,6 +205,12 @@ async def update_event(event_id: uuid.UUID, payload: EventUpdate, db: DB, user: 
     if "location" in updates and updates["location"] is not None:
         loc = payload.location
         updates["location"] = wkt_point(loc.lat, loc.lng)
+    if "status" in updates and updates["status"] != event.status:
+        if updates["status"] not in ALLOWED_STATUS_TRANSITIONS[event.status]:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Cannot change a {event.status} event to {updates['status']}",
+            )
     for field, value in updates.items():
         setattr(event, field, value)
     await db.commit()

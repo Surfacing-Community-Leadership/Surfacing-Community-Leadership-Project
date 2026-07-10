@@ -1,6 +1,7 @@
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select
 
 from app.models import Event, EventMessage, Profile, User
@@ -28,7 +29,13 @@ async def _require_participant(db, event: Event, user: User) -> None:
 
 
 @router.get("", response_model=list[MessageRead])
-async def list_messages(event_id: uuid.UUID, db: DB, user: CurrentUser):
+async def list_messages(
+    event_id: uuid.UUID,
+    db: DB,
+    user: CurrentUser,
+    limit: Annotated[int, Query(gt=0, le=200)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
+):
     event = await get_event_or_404(db, event_id)
     await _require_participant(db, event, user)
 
@@ -38,6 +45,8 @@ async def list_messages(event_id: uuid.UUID, db: DB, user: CurrentUser):
             .join(Profile, Profile.user_id == EventMessage.sender_id)
             .where(EventMessage.event_id == event.id)
             .order_by(EventMessage.created_at)
+            .limit(limit)
+            .offset(offset)
         )
     ).all()
     return [

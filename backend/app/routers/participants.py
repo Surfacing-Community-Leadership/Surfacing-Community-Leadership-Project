@@ -1,6 +1,7 @@
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import and_, func, or_, select
 
 from app.models import Connection, EventParticipant, Profile, User
@@ -26,7 +27,13 @@ router = APIRouter(prefix="/api/events/{event_id}", tags=["participation"])
 
 
 @router.get("/participants", response_model=list[ParticipantRead])
-async def list_participants(event_id: uuid.UUID, db: DB, user: CurrentUser):
+async def list_participants(
+    event_id: uuid.UUID,
+    db: DB,
+    user: CurrentUser,
+    limit: Annotated[int, Query(gt=0, le=200)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
+):
     event = await get_event_or_404(db, event_id)
     await require_event_view(db, event, user)
 
@@ -36,6 +43,8 @@ async def list_participants(event_id: uuid.UUID, db: DB, user: CurrentUser):
             .join(Profile, Profile.user_id == EventParticipant.user_id)
             .where(EventParticipant.event_id == event.id)
             .order_by(EventParticipant.created_at)
+            .limit(limit)
+            .offset(offset)
         )
     ).all()
     return [

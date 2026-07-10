@@ -1,13 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException
+import secrets
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
+from fastapi_users.authentication.strategy.db import DatabaseStrategy
 from fastapi_users.exceptions import InvalidPasswordException, UserAlreadyExists
 
 from app.core.auth import (
+    AUTH_COOKIE_NAME,
+    CSRF_COOKIE_NAME,
     UserManager,
     cookie_transport,
-    get_jwt_strategy,
+    get_database_strategy,
     get_user_manager,
 )
+from app.core.config import settings
 from app.models import Profile
 from app.routers.deps import DB, CurrentUser
 from app.schemas.auth import LoginRequest, RegisterRequest, UserCreate, UserRead
@@ -41,6 +47,7 @@ async def register(
 async def login(
     payload: LoginRequest,
     user_manager: UserManager = Depends(get_user_manager),
+    strategy: DatabaseStrategy = Depends(get_database_strategy),
 ):
     credentials = OAuth2PasswordRequestForm(
         username=payload.email, password=payload.password, scope=""
@@ -48,14 +55,34 @@ async def login(
     user = await user_manager.authenticate(credentials)
     if user is None or not user.is_active:
         raise HTTPException(status_code=400, detail="Invalid email or password")
-    token = await get_jwt_strategy().write_token(user)
-    # The token travels only inside an httpOnly cookie — the response body is
-    # empty and JavaScript never sees the JWT.
-    return await cookie_transport.get_login_response(token)
+
+    token = await strategy.write_token(user)  # creates the session row
+    response = await cookie_transport.get_login_response(token)
+    # Second, JS-readable cookie for CSRF double-submit: the frontend echoes
+    # its value in an X-CSRF-Token header, which a hostile site cannot forge
+    # because it can't read our cookies.
+    response.set_cookie(
+        CSRF_COOKIE_NAME,
+        secrets.token_hex(16),
+        max_age=settings.access_token_lifetime_seconds,
+        secure=settings.cookie_secure,
+        httponly=False,
+        samesite="lax",
+    )
+    return response
 
 
 @router.post("/logout", status_code=204)
-async def logout(user: CurrentUser):
-    # Clears the auth cookie. (The JWT inside remains technically valid until
-    # expiry — a token blocklist is the production-grade upgrade.)
-    return await cookie_transport.get_logout_response()
+async def logout(
+    request: Request,
+    user: CurrentUser,
+    strategy: DatabaseStrategy = Depends(get_database_strategy),
+):
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if token:
+        # Delete the session row — the token is dead server-side, not just
+        # forgotten by the browser.
+        await strategy.destroy_token(token, user)
+    response = await cookie_transport.get_logout_response()
+    response.delete_cookie(CSRF_COOKIE_NAME)
+    return response

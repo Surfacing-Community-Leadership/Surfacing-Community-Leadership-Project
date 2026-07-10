@@ -1,7 +1,8 @@
 import uuid
+from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, UploadFile
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,6 +11,10 @@ from app.routers.deps import DB, CurrentUser
 from app.schemas.profile import InterestIds, ProfilePublic, ProfileRead, ProfileUpdate
 
 router = APIRouter(prefix="/api/profiles", tags=["profiles"])
+
+AVATAR_DIR = Path("media/avatars")
+AVATAR_TYPES = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
+MAX_AVATAR_BYTES = 2 * 1024 * 1024
 
 
 async def _my_profile(db: AsyncSession, user: User) -> Profile:
@@ -36,6 +41,29 @@ async def update_my_profile(payload: ProfileUpdate, db: DB, user: CurrentUser):
 
     for field, value in updates.items():
         setattr(profile, field, value)
+    await db.commit()
+    await db.refresh(profile)
+    return profile
+
+
+@router.post("/me/avatar", response_model=ProfileRead)
+async def upload_avatar(db: DB, user: CurrentUser, file: UploadFile):
+    """Stores the image on local disk under media/avatars and points
+    avatar_key at it. (Production would use object storage instead.)"""
+    ext = AVATAR_TYPES.get(file.content_type)
+    if ext is None:
+        raise HTTPException(status_code=422, detail="Avatar must be JPEG, PNG or WebP")
+    data = await file.read()
+    if len(data) > MAX_AVATAR_BYTES:
+        raise HTTPException(status_code=422, detail="Avatar must be under 2 MB")
+
+    profile = await _my_profile(db, user)
+    AVATAR_DIR.mkdir(parents=True, exist_ok=True)
+    for old in AVATAR_DIR.glob(f"{user.id}.*"):  # replacing, not accumulating
+        old.unlink()
+    (AVATAR_DIR / f"{user.id}.{ext}").write_bytes(data)
+
+    profile.avatar_key = f"avatars/{user.id}.{ext}"
     await db.commit()
     await db.refresh(profile)
     return profile

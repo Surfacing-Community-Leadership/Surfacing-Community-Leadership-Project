@@ -4,7 +4,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import Depends, HTTPException
-from sqlalchemy import or_, select
+from sqlalchemy import case, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import current_active_user
@@ -42,8 +42,24 @@ async def get_my_community_id(db: AsyncSession, user_id: uuid.UUID) -> uuid.UUID
     return await db.scalar(select(Profile.community_id).where(Profile.user_id == user_id))
 
 
+def blocked_counterparts(user_id: uuid.UUID):
+    """Subquery of every user id that has a block with user_id, in either
+    direction. Usable inside not_in() filters."""
+    return select(
+        case(
+            (Block.blocker_id == user_id, Block.blocked_id),
+            else_=Block.blocker_id,
+        )
+    ).where(or_(Block.blocker_id == user_id, Block.blocked_id == user_id))
+
+
 async def user_can_view_event(db: AsyncSession, event: Event, user: User) -> bool:
-    if event.host_id == user.id or event.visibility == "public":
+    if event.host_id == user.id:
+        return True
+    # A block in either direction makes the host's events invisible.
+    if event.host_id is not None and await blocked_either_way(db, user.id, event.host_id):
+        return False
+    if event.visibility == "public":
         return True
     if event.visibility == "community":
         if event.community_id is None:
@@ -51,6 +67,14 @@ async def user_can_view_event(db: AsyncSession, event: Event, user: User) -> boo
         return await get_my_community_id(db, user.id) == event.community_id
     # private: only people with a participation row (invited or otherwise)
     return await get_participation(db, event.id, user.id) is not None
+
+
+ALLOWED_STATUS_TRANSITIONS = {
+    "open": {"full", "cancelled", "completed"},
+    "full": {"open", "cancelled", "completed"},
+    "cancelled": set(),  # terminal
+    "completed": set(),  # terminal
+}
 
 
 async def require_event_view(db: AsyncSession, event: Event, user: User) -> None:

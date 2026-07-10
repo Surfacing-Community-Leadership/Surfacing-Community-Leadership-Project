@@ -16,7 +16,15 @@ check () { # check <name> <expected_status> <actual_status>
 
 req () { # req <method> <url> <cookie_jar|""> [json] -> sets STATUS and BODY
   local auth=()
-  [ -n "$3" ] && auth=(-b "$3" -c "$3")
+  if [ -n "$3" ]; then
+    auth=(-b "$3" -c "$3")
+    if [ "$1" != "GET" ]; then
+      # CSRF double-submit: echo the ours_csrf cookie in the header.
+      local csrf
+      csrf=$(awk '$6 == "ours_csrf" {print $7}' "$3" 2>/dev/null | tail -1)
+      [ -n "$csrf" ] && auth+=(-H "X-CSRF-Token: $csrf")
+    fi
+  fi
   if [ -n "${4:-}" ]; then
     RESP=$(curl -s -w "\n%{http_code}" -X "$1" "$2" "${auth[@]}" -H "Content-Type: application/json" -d "$4")
   else
@@ -59,6 +67,8 @@ req GET $API/users/me "$DYLAN"
 check "users/me via cookie" 200 "$STATUS"
 req GET $API/users/me ""
 check "users/me unauthenticated" 401 "$STATUS"
+NO_CSRF=$(curl -s -o /dev/null -w "%{http_code}" -X PATCH $API/profiles/me -b "$DYLAN" -H "Content-Type: application/json" -d '{"bio":"x"}')
+check "mutating request without CSRF header -> 403" 403 "$NO_CSRF"
 
 echo "=== profiles & interests ==="
 req GET $API/profiles/me "$DYLAN"
@@ -166,6 +176,13 @@ check "blocked user cannot connect -> 403" 403 "$STATUS"
 req GET "$API/profiles?q=Eleanor" "$BOB"
 BLOCKED_SEARCH=$(echo "$BODY" | /usr/bin/python3 -c "import sys, json; print(len(json.load(sys.stdin)))")
 echo "     -> blocked user searching Eleanor finds: $BLOCKED_SEARCH (expect 0)"
+req GET "$API/events?lat=40.6552&lng=-74.0069&radius_m=3000" "$BOB"
+BOB_SEES=$(echo "$BODY" | /usr/bin/python3 -c "import sys, json; print(len(json.load(sys.stdin)))")
+echo "     -> blocked bob's map count: $BOB_SEES (expect 1: eleanor's help request hidden)"
+req GET "$API/events/$HELP_ID" "$BOB"
+check "blocker's event detail hidden from blocked user -> 404" 404 "$STATUS"
+req GET "$API/events/$HELP_ID" "$DYLAN"
+check "same event still visible to others" 200 "$STATUS"
 req GET $API/blocks "$ELEANOR"
 check "list blocks" 200 "$STATUS"
 req POST $API/reports "$ELEANOR" "{\"reported_user_id\":\"$BOB_ID\",\"reason\":\"spam\",\"details\":\"unwanted messages\"}"
