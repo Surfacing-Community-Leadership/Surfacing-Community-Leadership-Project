@@ -95,8 +95,27 @@ setup instructions for each part are added here as that part lands.
 - [x] Participation: RSVPs and invites
 - [x] Connections, blocks, reports
 - [x] Event-scoped messaging
+- [x] Frontend: auth, map, event creation & discovery
 - [ ] Backend hardening: pytest suite, SQLAdmin, rate limiting
-- [ ] Frontend: auth, map, event creation & discovery
+- [ ] Frontend polish: real modals, image uploads, automated tests
 
 Design decisions made along the way are logged in
-[docs/DECISIONS.md](docs/DECISIONS.md).
+[docs/DECISIONS.md](docs/DECISIONS.md) (backend) and
+[docs/FRONTEND_DECISIONS.md](docs/FRONTEND_DECISIONS.md) (frontend).
+
+## Running it locally
+
+Two terminals, from the repo root:
+
+```bash
+# 1. Backend (needs Postgres.app running with the ours_dev database)
+cd backend
+.venv/bin/uvicorn app.main:app --reload --port 8000
+
+# 2. Frontend
+cd frontend
+npm install     # first time only
+npm run dev     # serves http://localhost:5173, proxies /api to :8000
+```
+
+Open http://localhost:5173 and register an account.
