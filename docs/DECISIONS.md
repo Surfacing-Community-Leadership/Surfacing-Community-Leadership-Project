@@ -82,6 +82,23 @@ from the written spec; everything else fills a gap the spec left open.
 24. **`cryptography` was installed from a prebuilt wheel** (`--only-binary`);
     the newest source-only release fails to build on this Intel-Python setup.
 
+## Revisions — 2026-07-10 (post-review, user-directed)
+
+- **Auth moved from bearer tokens to an httpOnly cookie** (`ours_auth`,
+  SameSite=Lax, Secure off in dev via `COOKIE_SECURE`, must be on in prod).
+  This supersedes items 1–2 above in part: login now returns **204 and sets
+  the cookie** (no more `{ access_token }` body — a deliberate contract
+  change), and logout now genuinely clears the cookie. The JWT inside is
+  still valid until expiry if somehow captured; a token blocklist remains the
+  production upgrade. SameSite=Lax is the MVP CSRF answer; a real CSRF token
+  is the production-grade one.
+- **Added `GET /api/profiles/me/interests`** so the UI can show current
+  selections (contract gap found while building the frontend).
+- **Added `GET /api/profiles?q=` people search** — matches display names
+  case-insensitively (LIKE wildcards escaped), excludes yourself and anyone
+  with a block in either direction, capped at 20 results, min 2 characters.
+- `show_attending` deliberately left unused for now (user decision).
+
 ## Deferred (known gaps to discuss)
 
 - Tests are a curl smoke script, not a pytest suite.

@@ -1,10 +1,11 @@
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Community, Interest, Profile, User, user_interests
+from app.models import Block, Community, Interest, Profile, User, user_interests
 from app.routers.deps import DB, CurrentUser
 from app.schemas.profile import InterestIds, ProfilePublic, ProfileRead, ProfileUpdate
 
@@ -38,6 +39,45 @@ async def update_my_profile(payload: ProfileUpdate, db: DB, user: CurrentUser):
     await db.commit()
     await db.refresh(profile)
     return profile
+
+
+@router.get("", response_model=list[ProfilePublic])
+async def search_profiles(
+    db: DB,
+    user: CurrentUser,
+    q: Annotated[str, Query(min_length=2, max_length=80)],
+):
+    """Find neighbors by display name. Excludes yourself and anyone with a
+    block in either direction."""
+    # Escape LIKE wildcards so a search for "100%" means the literal text.
+    escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    i_blocked = select(Block.blocked_id).where(Block.blocker_id == user.id)
+    blocked_me = select(Block.blocker_id).where(Block.blocked_id == user.id)
+
+    profiles = (
+        await db.scalars(
+            select(Profile)
+            .where(Profile.display_name.ilike(f"%{escaped}%"))
+            .where(Profile.user_id != user.id)
+            .where(Profile.user_id.not_in(i_blocked))
+            .where(Profile.user_id.not_in(blocked_me))
+            .order_by(Profile.display_name)
+            .limit(20)
+        )
+    ).all()
+    return profiles
+
+
+@router.get("/me/interests", response_model=InterestIds)
+async def read_my_interests(db: DB, user: CurrentUser):
+    ids = (
+        await db.scalars(
+            select(user_interests.c.interest_id).where(
+                user_interests.c.user_id == user.id
+            )
+        )
+    ).all()
+    return InterestIds(interest_ids=ids)
 
 
 @router.put("/me/interests", response_model=InterestIds)

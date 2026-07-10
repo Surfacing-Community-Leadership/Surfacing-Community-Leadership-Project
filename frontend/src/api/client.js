@@ -1,16 +1,8 @@
-// A thin wrapper around the native Fetch API. Every request goes through
-// here so token handling, JSON encoding, and error shaping live in one place.
-
-const TOKEN_KEY = "ours.token";
-
-export function getToken() {
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-export function setToken(token) {
-  if (token) localStorage.setItem(TOKEN_KEY, token);
-  else localStorage.removeItem(TOKEN_KEY);
-}
+// A thin wrapper around the native Fetch API. Auth rides in an httpOnly
+// cookie set by the backend, so there is no token handling here at all —
+// JavaScript never sees the JWT. The browser attaches the cookie itself
+// (fetch's default credentials mode is "same-origin", and the Vite proxy
+// makes /api same-origin in development).
 
 // Thrown for any non-2xx response. Carries the HTTP status and the backend's
 // { message } text so callers can branch on either.
@@ -23,17 +15,15 @@ export class ApiError extends Error {
 }
 
 // Callback registered by the auth layer; fires on any 401 so the app can
-// drop the stale token and bounce the user to /login.
+// drop its user state and bounce to /login.
 let onUnauthorized = () => {};
 export function setUnauthorizedHandler(fn) {
   onUnauthorized = fn;
 }
 
-async function request(method, path, body, { auth = true } = {}) {
+async function request(method, path, body) {
   const headers = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  const token = getToken();
-  if (auth && token) headers["Authorization"] = `Bearer ${token}`;
 
   const res = await fetch(path, {
     method,
@@ -43,7 +33,7 @@ async function request(method, path, body, { auth = true } = {}) {
 
   if (res.status === 401) {
     onUnauthorized();
-    throw new ApiError(401, "Your session has expired. Please log in again.");
+    throw new ApiError(401, "Please log in to continue.");
   }
 
   // 204 No Content and other empty bodies: nothing to parse.
@@ -58,9 +48,9 @@ async function request(method, path, body, { auth = true } = {}) {
 }
 
 export const api = {
-  get: (path, opts) => request("GET", path, undefined, opts),
-  post: (path, body, opts) => request("POST", path, body, opts),
-  put: (path, body, opts) => request("PUT", path, body, opts),
-  patch: (path, body, opts) => request("PATCH", path, body, opts),
-  del: (path, opts) => request("DELETE", path, undefined, opts),
+  get: (path) => request("GET", path),
+  post: (path, body) => request("POST", path, body),
+  put: (path, body) => request("PUT", path, body),
+  patch: (path, body) => request("PATCH", path, body),
+  del: (path) => request("DELETE", path),
 };

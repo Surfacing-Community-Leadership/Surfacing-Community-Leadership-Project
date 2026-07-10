@@ -95,6 +95,18 @@ expose something the UI ideally wants; I worked around them and noted each.
     connection's attended events, so the preference is captured but not acted
     on. Backend feature to add later.
 
+## Revisions — 2026-07-10 (post-review, user-directed)
+
+- **#5 resolved:** JWT no longer touches JavaScript. Auth rides in an
+  httpOnly cookie; `client.js` has zero token code and the browser attaches
+  the cookie itself. Any lingering `ours.token` in localStorage is ignored.
+- **#21 resolved:** onboarding now pre-fills the user's current interests,
+  community, and preference flags via `GET /api/profiles/me/interests` +
+  `GET /api/profiles/me` — it doubles as a real "edit preferences" screen.
+- **#22 resolved:** the Connections page has a "Find people" search backed by
+  `GET /api/profiles?q=`, with inline Connect buttons.
+- **#24 stands:** `show_attending` stays captured-but-unused, per review.
+
 ## Not done (deferred)
 
 - No automated frontend tests (build passes; flows verified manually through

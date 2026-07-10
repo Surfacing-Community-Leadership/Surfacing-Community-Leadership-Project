@@ -4,7 +4,7 @@ from fastapi import Depends
 from fastapi_users import BaseUserManager, FastAPIUsers, UUIDIDMixin
 from fastapi_users.authentication import (
     AuthenticationBackend,
-    BearerTransport,
+    CookieTransport,
     JWTStrategy,
 )
 from fastapi_users.exceptions import InvalidPasswordException
@@ -40,7 +40,17 @@ async def get_user_manager(
     yield UserManager(user_db)
 
 
-bearer_transport = BearerTransport(tokenUrl="/api/auth/login")
+# httpOnly cookie: JavaScript can never read the token, which closes the
+# XSS-steals-your-session hole that localStorage tokens have. samesite="lax"
+# stops other sites from riding the cookie on cross-site POSTs (basic CSRF
+# protection; a real CSRF token is the production-grade upgrade).
+cookie_transport = CookieTransport(
+    cookie_name="ours_auth",
+    cookie_max_age=settings.access_token_lifetime_seconds,
+    cookie_secure=settings.cookie_secure,
+    cookie_httponly=True,
+    cookie_samesite="lax",
+)
 
 
 def get_jwt_strategy() -> JWTStrategy:
@@ -51,8 +61,8 @@ def get_jwt_strategy() -> JWTStrategy:
 
 
 auth_backend = AuthenticationBackend(
-    name="jwt",
-    transport=bearer_transport,
+    name="jwt-cookie",
+    transport=cookie_transport,
     get_strategy=get_jwt_strategy,
 )
 

@@ -1,19 +1,21 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client.js";
 import { useApi } from "../hooks/useApi.js";
 import Field from "../components/Field.jsx";
 
-// Optional first-run step. Everything here can be skipped and edited later
-// from the profile page, so nothing blocks the user from reaching the map.
+// Optional first-run step, also reachable later as "edit preferences" —
+// it pre-fills whatever the user chose before, so nothing gets lost.
 export default function Onboarding() {
   const navigate = useNavigate();
   const { data, loading, error } = useApi(async () => {
-    const [interests, communities] = await Promise.all([
+    const [interests, communities, profile, myInterests] = await Promise.all([
       api.get("/api/interests"),
       api.get("/api/communities"),
+      api.get("/api/profiles/me"),
+      api.get("/api/profiles/me/interests"),
     ]);
-    return { interests, communities };
+    return { interests, communities, profile, myInterests };
   });
 
   const [selected, setSelected] = useState(new Set());
@@ -22,6 +24,15 @@ export default function Onboarding() {
   const [showAttending, setShowAttending] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
+
+  // Seed the form with current preferences once they arrive.
+  useEffect(() => {
+    if (!data) return;
+    setSelected(new Set(data.myInterests.interest_ids));
+    setCommunityId(data.profile.community_id || "");
+    setOpenToHelp(data.profile.open_to_help);
+    setShowAttending(data.profile.show_attending);
+  }, [data]);
 
   function toggle(id) {
     setSelected((prev) => {

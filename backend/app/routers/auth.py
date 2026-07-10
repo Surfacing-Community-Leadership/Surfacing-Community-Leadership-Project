@@ -2,16 +2,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi_users.exceptions import InvalidPasswordException, UserAlreadyExists
 
-from app.core.auth import UserManager, get_jwt_strategy, get_user_manager
+from app.core.auth import (
+    UserManager,
+    cookie_transport,
+    get_jwt_strategy,
+    get_user_manager,
+)
 from app.models import Profile
 from app.routers.deps import DB, CurrentUser
-from app.schemas.auth import (
-    LoginRequest,
-    RegisterRequest,
-    TokenResponse,
-    UserCreate,
-    UserRead,
-)
+from app.schemas.auth import LoginRequest, RegisterRequest, UserCreate, UserRead
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -38,7 +37,7 @@ async def register(
     return user
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", status_code=204)
 async def login(
     payload: LoginRequest,
     user_manager: UserManager = Depends(get_user_manager),
@@ -50,11 +49,13 @@ async def login(
     if user is None or not user.is_active:
         raise HTTPException(status_code=400, detail="Invalid email or password")
     token = await get_jwt_strategy().write_token(user)
-    return TokenResponse(access_token=token)
+    # The token travels only inside an httpOnly cookie — the response body is
+    # empty and JavaScript never sees the JWT.
+    return await cookie_transport.get_login_response(token)
 
 
 @router.post("/logout", status_code=204)
-async def logout(user: CurrentUser) -> None:
-    # JWTs are stateless: logout is the client discarding its token.
-    # Requiring auth here still gives the contract its 401 behavior.
-    return None
+async def logout(user: CurrentUser):
+    # Clears the auth cookie. (The JWT inside remains technically valid until
+    # expiry — a token blocklist is the production-grade upgrade.)
+    return await cookie_transport.get_logout_response()
