@@ -389,6 +389,33 @@ button.danger {
   line-height: 1;
   margin-bottom: 0.5rem;
 }
+.avatar-img {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--line);
+}
+.avatar-img-lg {
+  width: 96px;
+  height: 96px;
+  margin-bottom: 0.5rem;
+}
+
+/* ---- Modals ---- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal {
+  width: min(420px, calc(100vw - 2rem));
+  margin: 0;
+}
 
 /* ---- Small screens: stack the two-column layouts ---- */
 @media (max-width: 780px) {

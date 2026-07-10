@@ -21,14 +21,26 @@ export function setUnauthorizedHandler(fn) {
   onUnauthorized = fn;
 }
 
-async function request(method, path, body) {
+// The CSRF cookie is deliberately readable by JavaScript: we prove we're the
+// real frontend by echoing it in a header, which other origins cannot do.
+function readCsrfCookie() {
+  const match = document.cookie.match(/(?:^|;\s*)ours_csrf=([^;]+)/);
+  return match ? match[1] : null;
+}
+
+async function request(method, path, body, isForm = false) {
   const headers = {};
-  if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (body !== undefined && !isForm) headers["Content-Type"] = "application/json";
+  if (method !== "GET") {
+    const csrf = readCsrfCookie();
+    if (csrf) headers["X-CSRF-Token"] = csrf;
+  }
 
   const res = await fetch(path, {
     method,
     headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body:
+      body === undefined ? undefined : isForm ? body : JSON.stringify(body),
   });
 
   if (res.status === 401) {
@@ -53,4 +65,12 @@ export const api = {
   put: (path, body) => request("PUT", path, body),
   patch: (path, body) => request("PATCH", path, body),
   del: (path) => request("DELETE", path),
+  // multipart upload: pass a FormData; the browser sets the content type.
+  upload: (path, formData) => request("POST", path, formData, true),
 };
+
+// avatar_key is either an uploaded file path ("avatars/<id>.jpg") or a
+// legacy text/emoji label. Returns an image URL or null.
+export function avatarUrl(key) {
+  return key && key.startsWith("avatars/") ? `/media/${key}` : null;
+}

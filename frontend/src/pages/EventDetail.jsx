@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { api } from "../api/client.js";
 import { useApi } from "../hooks/useApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
+import { ConfirmDialog, ReportDialog } from "../components/dialogs.jsx";
 
 const ACTIVE = ["invited", "going", "maybe", "attended"];
 
@@ -21,6 +22,8 @@ export default function EventDetail() {
   }, [id]);
 
   const [actionError, setActionError] = useState(null);
+  const [notice, setNotice] = useState(null);
+  const [dialog, setDialog] = useState(null); // "delete" | "report" | null
 
   if (loading) return <div className="centered muted">Loading…</div>;
   if (error) return <div className="alert">{error}</div>;
@@ -46,7 +49,7 @@ export default function EventDetail() {
     act(() => api.patch(`/api/events/${id}`, { status: "cancelled" }));
 
   async function deleteEvent() {
-    if (!confirm("Delete this event? This cannot be undone.")) return;
+    setDialog(null);
     try {
       await api.del(`/api/events/${id}`);
       navigate("/");
@@ -55,13 +58,15 @@ export default function EventDetail() {
     }
   }
 
-  async function report() {
-    const reason = prompt("Why are you reporting this event?");
-    if (!reason) return;
-    await act(() =>
-      api.post("/api/reports", { reported_event_id: id, reason }),
-    );
-    alert("Thanks — this has been sent to moderators.");
+  async function report(reason) {
+    setDialog(null);
+    setNotice(null);
+    try {
+      await api.post("/api/reports", { reported_event_id: id, reason });
+      setNotice("Thanks — this has been sent to the moderators.");
+    } catch (err) {
+      setActionError(err.message);
+    }
   }
 
   return (
@@ -93,6 +98,7 @@ export default function EventDetail() {
           </p>
 
           {actionError && <div className="alert">{actionError}</div>}
+          {notice && <p className="muted">{notice}</p>}
 
           {/* RSVP controls — hidden from the host, who owns the event. */}
           {!isHost && (
@@ -128,17 +134,33 @@ export default function EventDetail() {
               <button className="secondary" onClick={cancelEvent}>
                 Cancel event
               </button>
-              <button className="danger" onClick={deleteEvent}>
+              <button className="danger" onClick={() => setDialog("delete")}>
                 Delete
               </button>
             </div>
           )}
           {!isHost && (
-            <button className="link-button" onClick={report}>
+            <button className="link-button" onClick={() => setDialog("report")}>
               Report this event
             </button>
           )}
         </div>
+
+        <ConfirmDialog
+          open={dialog === "delete"}
+          title="Delete this event?"
+          body="This permanently removes the event, its RSVPs, and its messages. To call it off but keep the record, use Cancel event instead."
+          confirmLabel="Delete forever"
+          danger
+          onConfirm={deleteEvent}
+          onClose={() => setDialog(null)}
+        />
+        <ReportDialog
+          open={dialog === "report"}
+          what="this event"
+          onSubmit={report}
+          onClose={() => setDialog(null)}
+        />
 
         {canParticipate && <Messages eventId={id} />}
       </div>

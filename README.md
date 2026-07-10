@@ -96,8 +96,9 @@ setup instructions for each part are added here as that part lands.
 - [x] Connections, blocks, reports
 - [x] Event-scoped messaging
 - [x] Frontend: auth, map, event creation & discovery
-- [ ] Backend hardening: pytest suite, SQLAdmin, rate limiting
-- [ ] Frontend polish: real modals, image uploads, automated tests
+- [x] Backend hardening: pytest suite, SQLAdmin, revocable sessions, CSRF,
+      block-aware visibility, avatar uploads, pagination
+- [ ] Rate limiting; frontend automated tests; object storage for uploads
 
 Design decisions made along the way are logged in
 [docs/DECISIONS.md](docs/DECISIONS.md) (backend) and
@@ -119,3 +120,11 @@ npm run dev     # serves http://localhost:5173, proxies /api to :8000
 ```
 
 Open http://localhost:5173 and register an account.
+
+**Admin panel:** register an account in the app, promote it with
+`cd backend && .venv/bin/python scripts/make_admin.py you@example.com`,
+then log in at http://localhost:8000/admin.
+
+**Tests:** `cd backend && .venv/bin/pytest` (creates and uses a disposable
+`ours_test` database). The curl smoke test is
+`backend/scripts/smoke_test.sh` — reset dev data first as noted in its header.

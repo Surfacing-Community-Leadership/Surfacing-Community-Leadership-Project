@@ -107,10 +107,22 @@ expose something the UI ideally wants; I worked around them and noted each.
   `GET /api/profiles?q=`, with inline Connect buttons.
 - **#24 stands:** `show_attending` stays captured-but-unused, per review.
 
+## Revisions — 2026-07-10, round two
+
+- **CSRF handled invisibly in `client.js`**: every mutating request reads the
+  `ours_csrf` cookie and echoes it as `X-CSRF-Token`. Pages never think about
+  it.
+- **Native `confirm()`/`prompt()` replaced** with in-app `ConfirmDialog` /
+  `ReportDialog` components (`components/dialogs.jsx`) — used for event
+  delete, block, and both report flows.
+- **Avatar upload UI** on the profile page (file input → multipart POST via
+  `api.upload`); `avatarUrl()` in `client.js` resolves uploaded keys to
+  `/media/...` URLs, falling back to emoji/text for legacy values.
+
 ## Not done (deferred)
 
-- No automated frontend tests (build passes; flows verified manually through
-  the Vite proxy).
-- No image uploads — `avatar_key` is a free-text field (emoji/label) for now.
+- No automated frontend tests (the backend now has a 24-test pytest suite;
+  UI flows verified manually through the Vite proxy).
 - No optimistic UI; every mutation waits for the server then reloads.
-- No pagination controls (backend caps the map query at 200).
+- No pagination controls in the UI (backend supports limit/offset; defaults
+  cover MVP volumes).

@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../api/client.js";
+import { api, avatarUrl } from "../api/client.js";
 import { useApi } from "../hooks/useApi.js";
 import Field from "../components/Field.jsx";
 
 // The signed-in user's own editable profile.
 export default function Profile() {
-  const { data, error, loading } = useApi(async () => {
+  const { data, error, loading, reload } = useApi(async () => {
     const [profile, communities] = await Promise.all([
       api.get("/api/profiles/me"),
       api.get("/api/communities"),
@@ -25,7 +25,6 @@ export default function Profile() {
       setForm({
         display_name: p.display_name,
         bio: p.bio || "",
-        avatar_key: p.avatar_key || "",
         community_id: p.community_id || "",
         show_attending: p.show_attending,
         open_to_help: p.open_to_help,
@@ -40,6 +39,21 @@ export default function Profile() {
     const value = e.target.type === "checkbox" ? e.target.checked : e.target.value;
     setForm((f) => ({ ...f, [key]: value }));
   };
+
+  async function onAvatarPick(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setStatus(null);
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      await api.upload("/api/profiles/me/avatar", formData);
+      setStatus("Avatar updated.");
+      await reload();
+    } catch (err) {
+      setStatus(err.message);
+    }
+  }
 
   async function save(e) {
     e.preventDefault();
@@ -69,8 +83,23 @@ export default function Profile() {
         <Field label="Bio">
           <textarea value={form.bio} onChange={set("bio")} rows={3} maxLength={1000} />
         </Field>
-        <Field label="Avatar" hint="An emoji or short label for now.">
-          <input value={form.avatar_key} onChange={set("avatar_key")} />
+        <Field label="Avatar" hint="JPEG, PNG or WebP, up to 2 MB.">
+          <div className="row-actions">
+            {avatarUrl(data.profile.avatar_key) ? (
+              <img
+                className="avatar-img"
+                src={avatarUrl(data.profile.avatar_key)}
+                alt="Your avatar"
+              />
+            ) : (
+              <span className="avatar-lg">🙂</span>
+            )}
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={onAvatarPick}
+            />
+          </div>
         </Field>
         <Field label="Community">
           <select value={form.community_id} onChange={set("community_id")}>

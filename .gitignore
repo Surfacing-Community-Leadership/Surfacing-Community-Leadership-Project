@@ -9,6 +9,9 @@ __pycache__/
 .env.*
 !.env.example
 
+# Uploaded files (dev)
+backend/media/
+
 # Node (frontend, later)
 node_modules/
 dist/

@@ -99,11 +99,36 @@ from the written spec; everything else fills a gap the spec left open.
   with a block in either direction, capped at 20 results, min 2 characters.
 - `show_attending` deliberately left unused for now (user decision).
 
+## Revisions — 2026-07-10, round two (user-directed gap closure)
+
+- **Blocks now hide events entirely**: the map query excludes events hosted
+  by anyone with a block in either direction (NULL hosts stay visible), and
+  the single-event permission check does the same — so detail, RSVP,
+  participants, and messages all follow.
+- **Sessions are database-backed** (fastapi-users `DatabaseStrategy` +
+  `access_tokens` table) instead of JWTs. Tokens are opaque random strings;
+  **logout deletes the row and genuinely revokes the session**. Expired rows
+  accumulate until cleaned — a periodic sweep is a future ops task.
+- **CSRF double-submit**: login also sets a JS-readable `ours_csrf` cookie;
+  middleware rejects any mutating `/api` request whose `X-CSRF-Token` header
+  doesn't match it (403). Scoped to `/api` so SQLAdmin's forms are unaffected.
+  Login/register are naturally exempt (no auth cookie yet).
+- **SQLAdmin mounted at `/admin`**, login restricted to active superusers
+  (promote via `scripts/make_admin.py`). Users/events can't be created from
+  the admin (moderate, don't author); reports can't be deleted (audit trail);
+  PostGIS columns are excluded from forms (no widget — set via SQL).
+- **Event status is a state machine**: open ⇄ full, either → cancelled or
+  completed, and those two are terminal (409 otherwise).
+- **Pagination** (`limit`/`offset`) on event discovery, participants, and
+  messages.
+- **Avatar uploads**: `POST /api/profiles/me/avatar` (JPEG/PNG/WebP ≤ 2 MB)
+  stored on local disk under `media/avatars/` and served at `/media/…` —
+  production would use object storage (S3-style) instead.
+- **A real pytest suite** (24 tests) against a disposable `ours_test`
+  database created per run — see `backend/tests/`.
+
 ## Deferred (known gaps to discuss)
 
-- Tests are a curl smoke script, not a pytest suite.
-- SQLAdmin (admin UI) and rate limiting are in the stack but not yet wired.
-- Blocked users' events still appear on each other's maps (only connect,
-  invite and message paths enforce blocks so far).
-- `PATCH /api/events/{id}` accepts any status transition; no state machine.
-- No pagination on list endpoints (map query is capped at 200).
+- Rate limiting is in the stack but still not wired.
+- Expired access-token rows need a periodic cleanup task.
+- Avatar storage is local disk — swap for object storage before deploying.
