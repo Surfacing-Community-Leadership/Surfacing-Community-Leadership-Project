@@ -9,25 +9,39 @@ rubber duck.
 **How to use it:**
 
 - Read with the code open. Every concept points at a real file in this repo.
-- Each module ends with **✍️ Explain it yourself** prompts. Don't skip them.
-  Answer out loud or in writing. If you can't, reread — that's the signal.
+- Each module starts with **🎯 By the end you should be able to…** — treat
+  those as a checklist, and ends with **✍️ Explain it yourself** prompts.
+  Don't skip them. Answer out loud or in writing. If you can't, reread —
+  that's the signal.
 - Analogies are marked 💡. Steal them; they're for re-telling.
+- **Accuracy note:** every file path, function name, migration ID, and test
+  name in this guide was mechanically verified against the code when it was
+  written. Code moves; if a reference doesn't resolve, `grep` for the symbol
+  and trust the code over the guide — then fix the guide.
 
 **The modules:**
 
-0. The big picture — what this app is and what "full stack" means
-1. How the web works — HTTP, JSON, cookies (the ground everything stands on)
-2. The database — PostgreSQL, tables, PostGIS, migrations
-3. The backend — FastAPI, async, Pydantic, SQLAlchemy, dependency injection
-4. Identity & security — sessions, XSS, CSRF, authorization
-5. The frontend — React, components, state, hooks, the map
-6. Testing — how we know it works
-7. Vocabulary & patterns — the words engineers use, with plain definitions
-8. Exercises — prove it to yourself
+- **0.** The big picture — what this app is and what "full stack" means
+- **0.5** Run it first — see it working before you study it
+- **1.** How the web works — HTTP, JSON, cookies (the ground everything stands on)
+- **2.** The database — PostgreSQL, tables, PostGIS, migrations
+- **3.** The backend — FastAPI, async, Pydantic, SQLAlchemy, dependency injection
+- **4.** Identity & security — sessions, XSS, CSRF, authorization
+- **Interlude.** One request, all the way down — a single RSVP traced through every layer
+- **5.** The frontend — React's render loop, state, hooks, the map
+- **6.** Testing — how we know it works, and what we honestly don't know
+- **7.** The design decisions — what we chose, what we rejected, and what it cost
+- **8.** Vocabulary & patterns — the words engineers use, with plain definitions
+- **9.** Exercises — prove it to yourself
 
 ---
 
 ## Module 0 — The Big Picture
+
+**🎯 By the end you should be able to:** describe what Ours does and how its
+product philosophy shows up in code · explain the three-program architecture
+and why rules live on the server · define monolith vs microservices and
+argue for the choice made here.
 
 ### What this application is
 
@@ -92,7 +106,7 @@ The shape is called a **monolith with a separate SPA client**:
   (microservices — many small programs talking over a network) adds
   operational complexity that only pays off with large teams. One
   deliberate rule of this codebase: *don't add layers before they earn
-  their existence.*
+  their existence.* (Module 7 makes the full argument.)
 - **SPA (Single-Page Application)** = the browser downloads the JavaScript
   app once; after that, navigation swaps components in place and only *data*
   crosses the network. The alternative (server-rendered pages) re-sends
@@ -109,7 +123,76 @@ The shape is called a **monolith with a separate SPA client**:
 
 ---
 
+## Module 0.5 — Run It First
+
+**🎯 By the end you should be able to:** start all three programs, click
+through the core loop as two different users, and run both test suites.
+
+You learn a codebase dramatically faster after you've *seen it move*.
+Fifteen minutes, then start Module 1.
+
+**Prerequisites:** [Postgres.app](https://postgresapp.com/) installed and
+running (elephant icon in the menu bar), Python 3.12+, Node 20+.
+
+```bash
+# 1. Database — once
+psql -d postgres -c "CREATE DATABASE ours_dev;"
+psql -d ours_dev  -c "CREATE EXTENSION postgis;"
+
+# 2. Backend — terminal one
+cd backend
+python3 -m venv .venv
+.venv/bin/pip install -e '.[dev]'
+cp .env.example .env            # then edit: your macOS username in DATABASE_URL,
+                                # and a real SECRET_KEY (command is in the file)
+.venv/bin/alembic upgrade head  # builds every table from the migration chain
+.venv/bin/uvicorn app.main:app --reload --port 8000
+
+# 3. Frontend — terminal two
+cd frontend
+npm install
+npm run dev
+```
+
+**Now click through the core loop:**
+
+1. Open http://localhost:5173 — register an account, pick interests.
+2. Create an event: click the mini-map to drop a pin, set a time.
+3. Open a second browser (or a private window), register a *second*
+   account, find the event on the map, RSVP "Going".
+4. As user two, open user one's profile from the participants list and send
+   a connection request; as user one, accept it under Connections.
+5. Post a message inside the event from each account.
+6. Visit http://localhost:8000/docs — the API's auto-generated interactive
+   documentation. Expand `PUT /api/events/{event_id}/rsvp`. You'll meet the
+   machinery behind this page in Module 3.
+
+**Prove the safety net works:**
+
+```bash
+cd backend
+.venv/bin/pytest                       # 24 tests, disposable ours_test DB
+psql -d ours_dev -c "TRUNCATE users, events, communities CASCADE;"
+bash scripts/smoke_test.sh             # 55 end-to-end curl checks
+```
+
+(The smoke test registers fixed emails — hence the reset first. It will
+wipe your click-around accounts; that's fine, they were practice.)
+
+**✍️ Explain it yourself**
+
+1. What are the three processes now running on your machine, and what port
+   does each listen on? (Trick: the database was already running.)
+2. What did `alembic upgrade head` actually do, mechanically?
+
+---
+
 ## Module 1 — How the Web Works (the ground floor)
+
+**🎯 By the end you should be able to:** define request/response, name the
+five HTTP methods and the nine status codes this API uses · explain
+statelessness and how cookies fake memory on top of it · explain what the
+dev proxy is for.
 
 You cannot explain a web app without these four ideas. Most people use them
 daily without being able to define them — being able to define them is
@@ -205,6 +288,11 @@ naturally.
 
 ## Module 2 — The Database (PostgreSQL + PostGIS)
 
+**🎯 By the end you should be able to:** read the 13-table schema as a
+product spec · explain constraints, foreign-key delete rules, and why IDs
+are UUIDs · explain what PostGIS adds and how "events near me" stays fast ·
+describe the migration workflow and why generated migrations get reviewed.
+
 ### 2.1 What a relational database is
 
 **PostgreSQL** ("Postgres") stores data in **tables** — rigid grids where
@@ -230,8 +318,8 @@ The 13 tables (find each in [backend/app/models/](../backend/app/models/))
   API never sends a `users` row to another user, only profiles.
 - **communities** — named neighborhoods with an optional map center.
 - **events** — the heart. One table serves *both* gatherings and help
-  requests, distinguished by a `kind` column — they behave identically
-  (location, time, RSVPs), so two tables would duplicate everything.
+  requests, distinguished by a `kind` column (a decision unpacked in
+  Module 7).
 - **event_participants** — who's involved with which event, with a `status`
   (`invited`, `going`, `maybe`, `declined`, `attended`, `cancelled`). One
   clever unification: an *invitation* is just a participation row with
@@ -283,7 +371,8 @@ The **foreign-key delete rules** encode product decisions:
 Primary keys here are UUIDs (`7b7c65af-59bd-...`), not counting integers
 (1, 2, 3…). Event IDs appear in shareable URLs; sequential IDs would let a
 stranger enumerate `/events/1`, `/events/2`, … and also leak how many events
-exist. UUIDs are unguessable. Trade-off: bigger, unsortable — acceptable here.
+exist. UUIDs are unguessable. Trade-off: bigger, unsortable — Module 7 has
+the full cost accounting.
 
 ### 2.5 PostGIS: teaching a database geography
 
@@ -332,7 +421,8 @@ The workflow used throughout this project:
    clerk and a mediocre architect. This is not paranoia: in this very repo
    it once produced a migration referencing a module it never imported —
    the review caught what would have been a crash (see
-   `5a4fdb5228c8_create_access_tokens_table.py`).
+   `5a4fdb5228c8_create_access_tokens_table.py`, whose `created_at` column
+   type was hand-corrected for exactly this reason).
 4. `alembic upgrade head`.
 
 Migrations can also carry **data**, not just structure: see
@@ -354,6 +444,12 @@ interest tags so every environment gets the same vocabulary.
 ---
 
 ## Module 3 — The Backend (FastAPI + async + SQLAlchemy)
+
+**🎯 By the end you should be able to:** explain the Uvicorn/FastAPI/ASGI
+division of labor · explain `async`/`await` and what one blocking call would
+do · distinguish engine from session · describe how Pydantic turns type
+annotations into validation · draw the dependency-injection chain from
+memory.
 
 ### 3.1 The cast of characters
 
@@ -432,8 +528,8 @@ things to study there:
   and a report must target *something*
   ([schemas/report.py](../backend/app/schemas/report.py)).
 
-Bonus: from these same annotations FastAPI auto-generates interactive API
-docs at `http://localhost:8000/docs`. Free, always current.
+Bonus: from these same annotations FastAPI auto-generates the interactive
+API docs you visited in Module 0.5. Free, always current.
 
 ### 3.4 SQLAlchemy: objects ↔ rows
 
@@ -486,11 +582,41 @@ cleanup (close it, even if the handler raised). A handler that declares
 `db: DB` (the alias in [routers/deps.py](../backend/app/routers/deps.py))
 gets a fresh session, automatically cleaned up.
 
-The same mechanism powers auth: `user: CurrentUser` resolves through a
-chain — read cookie → look up token → load user — and if any step fails,
-the request 401s *before your handler runs*. Handlers begin already knowing
-who's asking. FastAPI also **caches dependencies within a request**, so the
-auth check and your handler share one session.
+Here is the full wiring for a typical protected handler — this diagram is
+worth redrawing from memory, because DI is the pattern newcomers find most
+magical-and-confusing, and it stops being magic the moment you can draw it:
+
+```
+async def set_rsvp(event_id, payload, db: DB, user: CurrentUser)
+                                      │            │
+        ┌─────────────────────────────┘            │
+        │                                          ▼
+        │                    current_active_user   (fastapi-users, core/auth.py)
+        │                          │
+        │                          │ 1. CookieTransport reads the
+        │                          │    "ours_auth" cookie from the request
+        │                          ▼
+        │                    DatabaseStrategy.read_token
+        │                          │ 2. SELECT ... FROM access_tokens
+        │                          │    WHERE token = <cookie value>
+        │                          │    (+ created_at within 24h lifetime)
+        │                          ▼
+        │                    get_access_token_db ─── needs a session ───┐
+        │                          │ 3. row found → load User row       │
+        │                          │    (is_active checked)             │
+        │                          ▼                                    │
+        │                    User object, or 401 — handler never runs   │
+        │                                                               │
+        └── get_db  ◀────────────────────────────────────────────────────┘
+                │   FastAPI CACHES dependencies per request:
+                │   the auth lookup and your handler share ONE session
+                ▼
+        AsyncSessionLocal() → borrows a pooled connection → Postgres
+```
+
+Read it bottom-up once, too: one pooled connection, wrapped in one session,
+shared by everything this request needs, closed by `get_db`'s post-`yield`
+cleanup no matter what happened.
 
 💡 DI is a restaurant kitchen's mise en place: the chef (handler) finds
 ingredients (session, user) already prepared at their station rather than
@@ -507,8 +633,8 @@ This codebase keeps logic in the **routers**, promoting shared rules to
 
 A worthwhile study exercise: notice the *pressure* toward a service layer.
 `set_rsvp` in [routers/participants.py](../backend/app/routers/participants.py)
-is ~40 lines of policy. At what size would you extract it? There's no
-universal answer — developing that judgment is the point.
+is ~35 lines of policy. At what size would you extract it? Module 7 states
+the position this codebase takes; developing your own judgment is the point.
 
 **✍️ Explain it yourself**
 
@@ -518,12 +644,17 @@ universal answer — developing that judgment is the point.
 3. Engine vs session — lifetimes, jobs, and why the pool exists.
 4. What happens, step by step, when a client POSTs invalid JSON to
    `/api/events`? Where does the 422 come from?
-5. What does `yield` do inside `get_db`, and why is it better than opening
-   sessions manually in every handler?
+5. Close the book and redraw the DI diagram for `set_rsvp`. Which arrow is
+   the 401? Which arrow is the shared session?
 
 ---
 
 ## Module 4 — Identity & Security (the deepest module)
+
+**🎯 By the end you should be able to:** explain hashing, and what a session
+physically is in this app · argue the JWT-vs-database-sessions trade-off ·
+explain XSS and CSRF and the exact mechanism that defeats each · locate the
+authorization policy at both of its enforcement altitudes.
 
 Security is where this codebase teaches the most. Take it slowly.
 
@@ -552,7 +683,8 @@ explaining end-to-end:
    = JavaScript cannot read it; only the browser's network machinery can.
 3. On every request, the browser attaches the cookie; the backend looks the
    token up in the table (and checks it isn't past the 24-hour lifetime).
-   Row found → that's your user. This is the `CurrentUser` dependency.
+   Row found → that's your user. This is the `CurrentUser` dependency you
+   saw in the Module 3 diagram.
 4. **Logout deletes the row.** The session is dead *server-side* — even if
    someone had copied the cookie, it now unlocks nothing. There's a test
    that proves exactly this by "stealing" the cookie before logout:
@@ -611,7 +743,7 @@ Memorize the pairing — it's a beautiful symmetry:
 
 ### 4.5 Authorization: who may do what (≠ authentication)
 
-**Authentication** = who are you (Module 4.2). **Authorization** = what may
+**Authentication** = who are you (§4.2). **Authorization** = what may
 *you* do. This app enforces authorization at two altitudes:
 
 - **Inside the SQL** — `discover_events` composes visibility directly into
@@ -662,51 +794,265 @@ text).
 
 ---
 
+## Interlude — One Request, All the Way Down
+
+**🎯 By the end you should be able to:** narrate this entire trace from
+memory, naming the file at every step. This is the keystone — every concept
+from Modules 1–4 fires here in sequence, and Module 5's concepts get
+previewed. Read it twice: once now, once after Module 5.
+
+**The scene:** Eleanor is looking at Dylan's "Board games in the park"
+(capacity 2, one seat taken) in her browser. She clicks **Going**.
+
+### In the browser (steps 1–4)
+
+1. **The click.** Eleanor's screen is the `EventDetail` component
+   ([pages/EventDetail.jsx](../frontend/src/pages/EventDetail.jsx)). The
+   Going button's `onClick` runs `rsvp("going")`, which is
+   `act(() => api.put(`/api/events/${id}/rsvp`, { status: "going" }))`.
+   `act()` first clears any previous error (`setActionError(null)` — a
+   state update), then awaits the API call.
+2. **The single funnel.** `api.put` lands in `request()` in
+   [api/client.js](../frontend/src/api/client.js) — the only file in the
+   frontend that talks to the network. It sets
+   `Content-Type: application/json`, serializes the body, and — because PUT
+   is a mutating method — calls `readCsrfCookie()` to copy the `ours_csrf`
+   cookie's value into an `X-CSRF-Token` header.
+3. **What the browser adds on its own.** As the request leaves, the browser
+   attaches every cookie for this site — including `ours_auth`, the
+   httpOnly session cookie that no line of our JavaScript can see. Two
+   proofs of identity are now aboard: one we attached (CSRF header), one
+   the browser attached (session cookie).
+4. **The proxy.** The URL is relative (`/api/...`), so it hits the Vite dev
+   server on port 5173, whose proxy rule
+   ([vite.config.js](../frontend/vite.config.js)) forwards it to the
+   backend on port 8000. Same-origin as far as the browser knows.
+
+### Into the backend (steps 5–8)
+
+5. **Uvicorn** accepts the connection, parses the raw bytes into an HTTP
+   request object, and hands it to the FastAPI app via ASGI.
+6. **Middleware.** The request passes through the middleware stack in
+   [main.py](../backend/app/main.py). (Fine print: `csrf_protect` was
+   registered *after* CORS, which in Starlette makes it the *outer* layer —
+   it runs first.) The CSRF check fires: mutating method ✓, path starts
+   with `/api` ✓, `ours_auth` cookie present ✓ → compare the
+   `X-CSRF-Token` header to the `ours_csrf` cookie. Match → continue.
+   (Mismatch would have ended everything here: 403, handler never runs.)
+7. **Routing.** FastAPI matches `PUT /api/events/{event_id}/rsvp` to
+   `set_rsvp()` in
+   [routers/participants.py](../backend/app/routers/participants.py) and
+   parses the path segment into a UUID (garbage in the URL → 422, before
+   any code of ours runs).
+8. **Dependency resolution** — the Module 3 diagram, live:
+   - `db: DB` → `get_db()` opens an `AsyncSession`, borrowing a pooled
+     connection from the engine.
+   - `user: CurrentUser` → the cookie's token is looked up in
+     `access_tokens` (one indexed SELECT, plus the 24h lifetime check), and
+     Eleanor's `User` row is loaded — *through the same cached session*.
+     No row → 401, handler never runs.
+   - `payload: RsvpPayload` → Pydantic validates the body;
+     `{"status": "going"}` is one of the three allowed literals. Anything
+     else → 422, handler never runs.
+
+### The handler (steps 9–12) — [routers/participants.py](../backend/app/routers/participants.py), `set_rsvp`
+
+9. **Existence + visibility.** `get_event_or_404` loads the event (`db.get`
+   by primary key). Then `require_event_view` applies the Module 4 policy:
+   Eleanor isn't the host; no block exists between her and Dylan; the event
+   is public → she may see it. (Private-and-uninvited would 404 here —
+   the "it doesn't exist for you" rule.)
+10. **State check.** The event's status is `open` — a `cancelled` or
+    `completed` event would 409 ("no longer open").
+11. **Capacity.** She's asking for `going`, the event has `capacity=2`, and
+    she isn't already confirmed — so the handler counts confirmed
+    participants with one `SELECT count(*)`. One of two seats taken → she
+    fits. (Count ≥ capacity would 409 "This event is full.")
+12. **The write.** No existing participation row for (event, Eleanor) → a
+    new `EventParticipant` is added with `status="going"`; `await
+    db.commit()` makes it real. At this instant the database's own defenses
+    have the final say: the CHECK constraint would reject an illegal status,
+    and the UNIQUE(event_id, user_id) constraint would reject a duplicate
+    row — even if every Python check above had been deleted.
+
+### Back up (steps 13–16)
+
+13. **Response.** The handler returns `RsvpRead(event_id=..., user_id=...,
+    status="going")` — a Pydantic schema, serialized to JSON, sent as a 200.
+    `get_db`'s post-`yield` cleanup closes the session; the connection goes
+    back to the pool.
+14. **The funnel again.** In `client.js`, `res.ok` is true; the JSON is
+    parsed and returned. (A 409 would instead have become
+    `throw new ApiError(409, "This event is full")`, and `act()`'s catch
+    would have put that exact message on screen.)
+15. **Re-fetch.** `act()` now calls `reload()` — the function returned by
+    the [useApi](../frontend/src/hooks/useApi.js) hook — which re-runs the
+    page's loader: `GET` the event and its participants again, fresh from
+    the server. No client-side cache to update; the server is the single
+    source of truth.
+16. **Re-render.** The loader's `setData(...)` is a state update, so React
+    re-runs the `EventDetail` function with the new data: Eleanor's row now
+    appears in "Who's coming," the Going button computes as active,
+    `participant_count` reads 2. React diffs the new tree against the old
+    and patches only those DOM nodes (Module 5 explains this loop). Total
+    elapsed: tens of milliseconds.
+
+**Worth noticing:** the request could have died at steps 6 (403), 7 (422),
+8 (401/422), 9 (404), 10 (409), 11 (409), or 12 (constraint violation) —
+each rejection at the *earliest layer that can know*. And one honest gap:
+between steps 1 and 14 the Going button is **not disabled** — a double-click
+fires two requests. Harmless here (the second is an update of the same row),
+but it's a real UX/robustness gap, and fixing it is Exercise 6.
+
+**✍️ Explain it yourself**
+
+1. Close the guide. Narrate the sixteen steps out loud, naming the file at
+   each one. (This is the module's entire point.)
+2. List every status code this one request could have produced, and the
+   step where each dies.
+3. Two proofs of identity travel with the request. Which one did our code
+   attach, which did the browser attach, and what attack does each defeat?
+
+---
+
 ## Module 5 — The Frontend (React + Vite + Leaflet)
+
+**🎯 By the end you should be able to:** explain "UI is a function of
+state" and the render → diff → commit loop · use `useEffect` and explain its
+dependency array without guessing · name the three state layers and defend
+the no-cache decision · trace a 401 from any page to the login screen.
 
 ### 5.1 What React actually is
 
 React's one big idea: **UI is a function of state.** You don't imperatively
 "find the button and change its label" — you declare *given this state, the
 screen looks like this*, and when state changes, React recomputes and
-patches the real page efficiently.
+patches the real page.
 
 - A **component** is a function returning JSX (HTML-looking syntax inside
   JavaScript). Pages live in [frontend/src/pages/](../frontend/src/pages/),
   reusable pieces in [components/](../frontend/src/components/).
 - **State** is per-component memory: `const [email, setEmail] = useState("")`.
-  Calling the setter re-runs the function with the new value — that's the
-  whole loop. See any form, e.g.
-  [pages/Login.jsx](../frontend/src/pages/Login.jsx).
-- **Props** are arguments passed into components (`<ConfirmDialog open={...} onConfirm={...}>`).
-- **Hooks** (`useState`, `useEffect`, `useContext`, and custom ones) are the
-  functions that give components memory and side effects.
+- **Props** are arguments passed into components
+  (`<ConfirmDialog open={...} onConfirm={...}>`).
 
 💡 A component is a **spreadsheet cell with a formula**: you never paint the
 cell by hand; you change an input and the formula recomputes it.
 
-### 5.2 The three state layers (interviewable)
+### 5.2 What actually happens when state changes (the render loop)
+
+This is the part most React users can't explain. When you call a setter
+(`setEmail("x")`, or `setData(...)` inside `useApi`):
+
+1. **Schedule.** React marks the component as needing re-render. (The
+   setter does *not* change your variable immediately — `email` keeps its
+   old value until the next render. Classic beginner trap.)
+2. **Render.** React calls your component function again, top to bottom,
+   with the new state. The JSX it returns is a description of the desired
+   screen — a lightweight tree of plain objects (the "virtual DOM"), not
+   real page elements. Rendering is cheap *because* it's just building this
+   description.
+3. **Diff (reconciliation).** React compares the new tree to the previous
+   one and computes the minimal set of differences.
+4. **Commit.** Only those differences are applied to the real page — the
+   expensive part, kept as small as possible.
+
+💡 **Analogy — the renovation architect.** Each render, you hand the
+contractor a complete new blueprint of the whole house. The contractor
+(React) compares it with the current house and repaints *one wall* — they
+don't demolish and rebuild. You get to *think* in whole-blueprints
+(simple!) while the work stays minimal (fast!).
+
+Watch it concretely in the Interlude's step 16: `setData` → `EventDetail`
+re-runs → the diff finds a changed button class and a changed count → two
+DOM patches, nothing else.
+
+Two practical consequences you'll see in this codebase:
+
+- **Re-running the function must be safe and side-effect-free** — which is
+  why anything that *does* something (fetching, subscribing, geolocation)
+  lives in `useEffect`, never in the function body. That's next.
+- **`key` props on lists** (every `.map(...)` in the pages has one) tell
+  the differ which items are *the same item* across renders, so it moves
+  rows instead of rebuilding them.
+
+### 5.3 `useEffect`: side effects, and the dependency array (where beginners get hurt)
+
+A component function should just *compute JSX*. But real pages must do
+things: fetch data, ask for geolocation, register a callback. `useEffect`
+is the escape hatch: "after you've rendered, run this code."
+
+```js
+useEffect(() => {
+  /* the effect */
+  return () => { /* optional cleanup */ };
+}, [deps]);
+```
+
+The **dependency array** is the part to actually understand, not memorize:
+it lists every value the effect *reads* that could change. React re-runs
+the effect **only when one of those values changed since the last render**.
+
+- `[]` — depends on nothing → runs once, after the first render ("on
+  mount"). Real example:
+  [auth/AuthContext.jsx](../frontend/src/auth/AuthContext.jsx) registers
+  the global 401 handler once; [pages/MapHome.jsx](../frontend/src/pages/MapHome.jsx)
+  asks for geolocation once.
+- `[data]` — re-runs when `data` changes. Real example:
+  [pages/Profile.jsx](../frontend/src/pages/Profile.jsx) and
+  [pages/Onboarding.jsx](../frontend/src/pages/Onboarding.jsx) *seed form
+  state from fetched data*: the fetch completes → `data` changes → the
+  effect copies it into the editable form fields. This "server data →
+  local editable copy" handoff is a pattern you'll reuse constantly.
+- **Omitted entirely** — runs after *every* render. Almost never what you
+  want.
+
+The two classic injuries, and where this repo stands on them:
+
+- **The infinite loop**: an effect that *sets state it also depends on*
+  re-triggers itself forever. (Set `data` → `data` changed → effect runs →
+  sets `data` → …) The cure is making the dependency the thing that should
+  *cause* the work, not the thing the work produces — note how the
+  Profile effect *reads* `data` but *sets* `form`.
+- **The stale closure**: an effect (or callback) "remembers" the state
+  values from the render it was created in. If you lie in the dependency
+  array, it keeps using stale values. The lint rule
+  (`react-hooks/exhaustive-deps`) exists to catch this — and where this
+  codebase deliberately deviates, it says so out loud: `useApi`
+  ([hooks/useApi.js](../frontend/src/hooks/useApi.js)) passes the *caller's*
+  deps to `useCallback` and disables the rule with a comment, because the
+  hook can't statically know what the caller's loader reads. That's an
+  informed exception, not a habit — copy the honesty (the comment), not
+  the disable.
+
+While you're in `useApi`, understand `useCallback`: functions are re-created
+on every render, so anything comparing them by identity (like a dependency
+array) would see "changed!" each time. `useCallback` returns the *same*
+function object until its own deps change — that's what lets `useApi`'s
+effect re-run only when the page's deps (like the event `id` from the URL)
+actually change, instead of on every render.
+
+### 5.4 The three state layers (interviewable)
 
 This app manages state at three distinct levels — being able to name them
 is a differentiator:
 
 1. **Local UI state** — one component's memory: form fields, "is this modal
    open," "is the request in flight." `useState` in the page. Look at how
-   every submit button disables itself via a `submitting` flag — that's
-   local state preventing double-submits.
+   every *form* submit button disables itself via a `submitting` flag —
+   local state preventing double-submits. (The RSVP buttons don't — see
+   the Interlude's honest gap, and Exercise 6.)
 2. **Global app state** — exactly one thing is global here: *who is logged
    in*. [auth/AuthContext.jsx](../frontend/src/auth/AuthContext.jsx) uses
    React **Context** to make `user`, `login`, `logout` available to any
    component without passing props down ten levels. On page load it calls
-   `GET /api/users/me` — "cookie, who am I?" — before rendering protected
-   pages (the `loading` flag exists so a refresh doesn't flash the login
-   screen).
+   `GET /api/users/me` — "cookie, who am I?" — and holds a `loading` flag
+   so a hard refresh doesn't flash the login screen at someone who is
+   actually logged in.
 3. **Server state** — data whose true owner is the backend: events,
-   messages, connections. The pattern here is deliberately simple: fetch it
-   fresh per page via the [useApi](../frontend/src/hooks/useApi.js) hook,
-   and after any mutation, call `reload()`. No cache, no Redux — because
-   *cache invalidation is the hard problem*, and re-fetching is always
-   correct. At this scale, correct-and-boring beats clever.
+   messages, connections. The pattern is deliberately simple: fetch fresh
+   per page via `useApi`, and after any mutation, `reload()`. No cache, no
+   Redux. Why — and what it costs — is a Module 7 entry.
 
 The `useApi` hook is the repo's best example of extracting a repeated
 pattern: every page needs the same four-state dance —
@@ -714,12 +1060,12 @@ pattern: every page needs the same four-state dance —
 every page renders those states the same way. Consistency itself is a
 feature; users learn one loading pattern, and so do future devs.
 
-### 5.3 The single network funnel
+### 5.5 The single network funnel
 
 [src/api/client.js](../frontend/src/api/client.js) is the **only** file
 that calls `fetch`. Three policies live there once instead of in every page:
 
-- JSON encoding/decoding, plus multipart for uploads.
+- JSON encoding/decoding, plus multipart for uploads (`api.upload`).
 - **CSRF header injection** — reads the `ours_csrf` cookie and attaches
   `X-CSRF-Token` to every mutating request. Pages don't know CSRF exists.
 - **Error normalization** — non-2xx becomes a typed `ApiError` with the
@@ -731,16 +1077,25 @@ that calls `fetch`. Three policies live there once instead of in every page:
 💡 One doorway into the building means one security checkpoint. If auth or
 error policy changes, one file changes.
 
-### 5.4 Routing: pages without page loads
+Trace the 401 path end-to-end once: `request()` sees 401 → calls
+`onUnauthorized()` → which is the callback `AuthContext` registered via
+`setUnauthorizedHandler` → `setUser(null)` → every component reading the
+context re-renders → `ProtectedRoute` sees `user == null` → `<Navigate
+to="/login">`. Four files, one policy, zero duplication.
+
+### 5.6 Routing: pages without page loads
 
 [App.jsx](../frontend/src/App.jsx) maps URLs to components with
 react-router: `/login` public; everything else nested inside
 `<ProtectedRoute><Layout/></ProtectedRoute>` — the auth gate and shared
 navigation wrap all private pages at once, and each page renders into
 `Layout`'s `<Outlet/>`. Dynamic segments like `/events/:id` are read with
-`useParams()` in [pages/EventDetail.jsx](../frontend/src/pages/EventDetail.jsx).
+`useParams()` in [pages/EventDetail.jsx](../frontend/src/pages/EventDetail.jsx)
+— and note how that `id` then appears in `useApi`'s dependency array, so
+navigating from one event to another re-fetches automatically. That's the
+hooks system composing: router state → dependency array → effect → fetch.
 
-### 5.5 The map
+### 5.7 The map
 
 [components/MapView.jsx](../frontend/src/components/MapView.jsx) wraps
 **Leaflet** (the map engine) via react-leaflet, drawing OpenStreetMap tiles
@@ -751,13 +1106,14 @@ navigation wrap all private pages at once, and each page renders into
   green/amber event pins trivially styleable.
 - **The escape hatch**: `MapBridge` uses react-leaflet hooks to lift the
   raw Leaflet map object up to the page — needed because "search this area"
-  must ask the map for its current bounds.
+  must ask the map for its current bounds. (Declarative wrappers around
+  imperative libraries always need one of these; recognize the shape.)
 - **Viewport-driven radius** ([pages/MapHome.jsx](../frontend/src/pages/MapHome.jsx)):
   the search radius is computed as center-to-corner distance of the visible
   map, so the query matches what the user actually sees. Geolocation falls
   back to a default neighborhood if denied — the map must never be broken.
 
-### 5.6 Forms, modals, uploads
+### 5.8 Forms, modals, uploads
 
 - Forms are **controlled components** (input value ↔ state), submitted via
   the shared client with a `submitting` flag and inline error display —
@@ -775,18 +1131,25 @@ navigation wrap all private pages at once, and each page renders into
 
 **✍️ Explain it yourself**
 
-1. "UI is a function of state" — explain with a concrete example from this
-   app (e.g. the RSVP buttons or a submit spinner).
-2. Name the three state layers and give one example of each from this repo.
+1. Walk through the four phases of a re-render using the Interlude's step
+   16 as your example. Why is "re-run the whole function" not wasteful?
+2. What does a `useEffect` dependency array actually control? Explain the
+   infinite-loop injury and the stale-closure injury, and how the
+   Profile-page effect avoids the first.
+3. Name the three state layers and give one example of each from this repo.
    Why is there no Redux/cache library?
-3. Trace what happens in the UI when a session expires mid-use: which file
+4. Trace what happens in the UI when a session expires mid-use: which file
    notices, what state changes, which component redirects?
-4. Why does `client.js` exist instead of pages calling `fetch` directly?
+5. Why does `client.js` exist instead of pages calling `fetch` directly?
    Name two policies that would otherwise be duplicated.
 
 ---
 
-## Module 6 — Testing: How We Know It Works
+## Module 6 — Testing: How We Know It Works (and what we don't)
+
+**🎯 By the end you should be able to:** explain both test layers and what
+each can catch · describe how the pytest suite isolates itself · state what
+is *not* tested here and the risk that carries.
 
 Two layers, deliberately different:
 
@@ -832,25 +1195,188 @@ handlers changed, the contracts didn't, the tests stayed green. Tests
 pinned to internals break on every refactor and teach you to fear change;
 tests pinned to behavior *enable* change.
 
+### 6.3 What is NOT tested — read this as a risk register
+
+Honesty about coverage is itself an engineering lesson. Known holes, and
+what each one risks:
+
+- **The frontend has zero automated tests.** `npm run build` proves the
+  code *parses*, not that it *works*. The CSRF header injection, the 401
+  redirect chain, the form validation — all verified only by humans
+  clicking. Risk: a refactor of `client.js` or `AuthContext` could silently
+  break every mutation, and no robot would object.
+- **Concurrency is untested — and there is a real race.** The capacity
+  check in `set_rsvp` is *check-then-insert* with no row locking: two
+  requests arriving in the same instant can both count 1-of-2 seats taken
+  and both insert. Tests run sequentially, so they can never catch it. At
+  neighborhood scale this is theoretical; at ticket-sale scale it's the
+  bug. (Fix would be a DB-level lock or constraint; knowing *that it's
+  there and unpriced* is the discipline.)
+- **Migrations aren't exercised by pytest.** The suite builds the test
+  schema from the models (`create_all`), not by replaying the migration
+  chain. If a migration drifted from the models, tests would stay green
+  and only the smoke test / a fresh deploy would notice.
+- **The admin panel and media uploads** have no automated coverage.
+- **Load and latency** — nothing measures how the map query behaves with
+  100k events.
+
+The meta-lesson: every test suite has a boundary, and teams get hurt by the
+boundary they *haven't written down*, not the one they have.
+
 **✍️ Explain it yourself**
 
-1. What can the smoke test catch that unit-style tests can't, and vice versa?
+1. What can the smoke test catch that the pytest suite can't, and vice
+   versa?
 2. How does the pytest suite guarantee it can't damage development data?
    (Two mechanisms.)
-3. Why is "test through the public API" a refactoring superpower?
+3. Explain the RSVP capacity race to a teammate: why do tests miss it, when
+   would it matter, and what would a fix look like?
+4. Why is "test through the public API" a refactoring superpower?
 
 ---
 
-## Module 7 — Vocabulary & Patterns (own these words)
+## Module 7 — The Design Decisions (what we chose, what it cost)
+
+**🎯 By the end you should be able to:** state each decision as *chose /
+rejected / because / at the cost of* — and argue the other side.
+
+This module is the guide's spine. Every codebase is a pile of decisions;
+most teams lose the reasoning within months. Here are the eight
+highest-leverage calls in this repo, each with its price tag — because a
+decision explained without its cost is advertising, not engineering.
+(The full running log, including calls that were later *reversed*, is in
+[DECISIONS.md](DECISIONS.md) — read it beside this.)
+
+### D1. One `events` table for gatherings AND help requests
+
+- **Chose:** a single table with a `kind` column.
+- **Rejected:** separate `gatherings` and `help_requests` tables.
+- **Because:** they behave identically — location, time, visibility,
+  RSVPs, messages, capacity. Two tables would duplicate every column,
+  every migration, every query, and every permission rule; the map endpoint
+  would need a UNION.
+- **Cost:** columns that only make sense for one kind (e.g. `capacity` on
+  a help request) exist on both, unenforced. If the two kinds ever *diverge*
+  behaviorally (help requests get "fulfilled by", gatherings get ticketing),
+  the shared table becomes a squeeze. The bet: they won't diverge soon.
+
+### D2. UUID primary keys, not auto-incrementing integers
+
+- **Chose:** `UUID DEFAULT gen_random_uuid()` everywhere.
+- **Rejected:** `SERIAL` integers.
+- **Because:** IDs travel in shareable URLs. Sequential IDs are guessable —
+  `/events/1`, `/events/2`, … — enabling enumeration of the whole table and
+  leaking volume ("this app has 300 users"). UUIDs are unguessable.
+- **Cost:** 16 bytes vs 4, no natural sort order (we order by real columns
+  like `created_at` instead), and uglier debugging ("event 7b7c65af…" vs
+  "event 12").
+
+### D3. Database-backed sessions, not JWTs (a reversal!)
+
+- **Chose:** opaque random tokens stored in `access_tokens`; the cookie is
+  a coat-check ticket.
+- **Rejected:** JWTs — *after initially shipping them.* This is the repo's
+  most instructive decision because it was changed with reasons.
+- **Because:** JWTs cannot be revoked before expiry; "logout" was a polite
+  fiction. A stolen token stayed valid for 24 hours. With DB sessions,
+  logout deletes the row — provably (there's a test).
+- **Cost:** one indexed SELECT per authenticated request, and a table of
+  expired rows that needs periodic sweeping (still an open ops task). At
+  massive scale you'd revisit (or add a cache); at this scale, correctness
+  wins.
+
+### D4. Monolith, not microservices
+
+- **Chose:** one FastAPI process owning API + media + admin.
+- **Rejected:** services split by domain (auth service, events service…).
+- **Because:** microservices trade *code* complexity for *operational*
+  complexity (deployment, network failures, distributed transactions,
+  tracing). That trade pays off for many teams working independently — not
+  for one small team building an MVP. A modular monolith (routers by
+  domain) preserves the seams to split *later, if ever*.
+- **Cost:** everything scales together (can't give just the map query more
+  machines), one bad deploy takes down everything, and the discipline of
+  module boundaries rests on convention, not network walls.
+
+### D5. Business logic in routers + shared `deps.py`, no service layer
+
+- **Chose:** handlers own their logic; shared rules promoted to
+  [routers/deps.py](../backend/app/routers/deps.py).
+- **Rejected:** a `services/` layer between routers and models, from day one.
+- **Because:** a layer must earn its existence. With one caller per rule, a
+  service layer is indirection without abstraction — every read of the code
+  requires one more hop. `deps.py` captures the genuinely shared rules
+  (visibility, blocks, the status machine) without ceremony.
+- **Cost:** handlers like `set_rsvp` mix HTTP concerns (status codes) with
+  domain rules (capacity). Logic is harder to reuse outside HTTP (a future
+  CLI or background job would have to call the API or duplicate rules).
+  The *pressure* to extract grows with the app — this is a decision to
+  revisit, on purpose, later.
+
+### D6. Re-fetch after every mutation, no client cache or state library
+
+- **Chose:** `useApi` per page + `reload()` after mutations; global state
+  is the logged-in user, nothing else.
+- **Rejected:** Redux / React Query / SWR-style caching.
+- **Because:** cache invalidation is famously the hard problem. Re-fetching
+  is *always correct*, trivially understandable, and at neighborhood scale
+  the extra requests are noise. Correct-and-boring beat clever.
+- **Cost:** more round-trips, brief loading flashes after actions (watch
+  the whole detail page re-load after an RSVP), no optimistic UI, and no
+  cross-page sharing (two components needing the same data fetch it twice).
+  The moment UX polish demands optimistic updates, this decision gets
+  revisited — knowingly.
+
+### D7. Messaging exists only inside events
+
+- **Chose:** `event_messages` with a mandatory `event_id`; no DM table.
+- **Rejected:** direct user-to-user messages.
+- **Because:** this is the *product* encoded as schema. The app's mission
+  is getting people into rooms, not hosting conversations; open DMs are
+  also a harassment surface the team would then have to moderate.
+- **Cost:** real user friction — "I just want to ask Eleanor something"
+  requires an event as pretext. If users demand DMs, this becomes a
+  deliberate product fight, not a quick schema change. That's intentional:
+  some decisions *should* be hard to reverse casually.
+
+### D8. Hard-delete accounts; hosted events survive with `host_id = NULL`
+
+- **Chose:** `DELETE /api/users/me` cascades personal data away for real;
+  `events.host_id` is `ON DELETE SET NULL`.
+- **Rejected:** soft delete (`deleted_at` flags) — and also cascading
+  event deletion.
+- **Because:** privacy honesty ("delete my account" should mean it) plus
+  not vandalizing other people's plans: attendees already RSVP'd to that
+  block party. The pair of FK rules encodes both values at once.
+- **Cost:** no "undo" for account deletion, no tombstone for moderation
+  history (a banned user's data vanishes too — reports referencing them
+  cascade away), and "orphaned" events with no host need UI care.
+
+**✍️ Explain it yourself**
+
+1. Pick any two decisions and argue the *rejected* side as persuasively as
+   you can. (If you can't make the rejected option sound reasonable, you
+   don't understand the decision yet.)
+2. Which of the eight is most likely to be reversed as the app grows, and
+   what event would trigger the reversal?
+3. D3 was a real reversal. What does the fact that it *shipped both ways*
+   teach about how decisions should be recorded?
+
+---
+
+## Module 8 — Vocabulary & Patterns (own these words)
+
+**🎯 By the end you should be able to:** define each term below in one
+sentence *and* point to where it lives in this repo.
 
 Plain-language definitions, each anchored to this repo. These are the terms
 that make you sound — and be — fluent.
 
 | Term | In plain words | In this repo |
 |---|---|---|
-| **Dependency Injection** | Don't fetch your tools; declare them as parameters and let the framework hand them in. | `Depends(get_db)`, `CurrentUser` — everywhere |
+| **Dependency Injection** | Don't fetch your tools; declare them as parameters and let the framework hand them in. | `Depends(get_db)`, `CurrentUser` — everywhere; diagram in §3.5 |
 | **Generator dependency** | A DI provider using `yield`: before = setup, after = guaranteed cleanup. | `get_db` in [core/database.py](../backend/app/core/database.py) |
-| **Strategy pattern** | Behavior slots you can swap without touching the callers. | fastapi-users auth = transport (how creds travel) × strategy (how tokens verify); we swapped Bearer→Cookie and JWT→DB with zero endpoint changes |
+| **Strategy pattern** | Behavior slots you can swap without touching the callers. | fastapi-users auth = transport (how credentials travel) × strategy (how tokens verify); we swapped Bearer→Cookie and JWT→DB with zero endpoint changes |
 | **Repository / adapter** | Wrap data access behind an interface so libraries don't touch your tables directly. | `SQLAlchemyUserDatabase` in [core/auth.py](../backend/app/core/auth.py) |
 | **Factory** | A function that manufactures configured objects. | `async_sessionmaker`; `make_user` in tests |
 | **Singleton (module-level)** | Created once at import, shared everywhere — the Pythonic way. | `engine`, `settings`, `app` |
@@ -862,28 +1388,34 @@ that make you sound — and be — fluent.
 | **Idempotent** | Safe to repeat with the same result. | `PUT /rsvp` (sets your status) vs `POST /invites` (repeating → 409) |
 | **Connection pool** | Keep expensive connections warm and lend them out. | the engine |
 | **Transaction** | All-or-nothing group of writes. | event + interest tags in `create_event` |
+| **Race condition** | Two concurrent operations interleave into a state neither intended. | the *known, accepted* RSVP capacity race (§6.3) |
+| **Reconciliation / diffing** | Compare desired UI tree to current, apply minimal patches. | React's render loop (§5.2) |
 | **CORS** | Browser rules about which origins may call which servers. | middleware + Vite proxy sidestep in dev |
 | **Environment config** | Secrets/config live outside code, per machine. | `.env` + [core/config.py](../backend/app/core/config.py); `.env.example` as the committed template |
 
-Also worth naming as *practices* rather than patterns: **migrations reviewed
-like code**, **decision logs** ([DECISIONS.md](DECISIONS.md) records every
-judgment call *and its later reversals* — read it beside the code), **one
-error shape** across the whole API, and **small, verifiable increments**
-(the git history of this repo is itself a study document — read it
-oldest-first with `git log --oneline --reverse`).
+Also worth naming as *practices* rather than patterns: **migrations
+reviewed like code** (§2.6), **decision logs with costs and reversals**
+(Module 7 + [DECISIONS.md](DECISIONS.md)), **one error shape** across the
+whole API, and **small, verifiable increments** — the git history of this
+repo is itself a study document; read it oldest-first with
+`git log --oneline --reverse`.
 
 ---
 
-## Module 8 — Exercises (proof of understanding)
+## Module 9 — Exercises (proof of understanding)
 
 **Tier 1 — Read and narrate** (no code changes)
 
-1. Trace `PUT /api/events/{id}/rsvp` file-by-file and list every way it can
-   be rejected, with the status code and the exact line that decides.
+1. The Interlude traced the RSVP. Now do your own trace, unaided, for
+   `POST /api/events/{id}/invites` — which has *more* rejection paths
+   (connection required, blocks, duplicates, inviter must be tied to the
+   event). List every status code and the exact line that decides it.
 2. Read `alembic/versions/` oldest-first and narrate the schema's history
    like a story: what arrived when, and why.
-3. Open `/docs` (interactive API docs) with the backend running and hit
-   three endpoints without the frontend. Explain where those docs come from.
+3. With the backend running, use only `/docs` (no frontend) to: register,
+   log in, create an event, RSVP to it. (Hint: you'll collide with CSRF —
+   understanding *why*, and what the browser normally does for you, is the
+   exercise.)
 
 **Tier 2 — Small extensions**
 
@@ -894,23 +1426,30 @@ oldest-first with `git log --oneline --reverse`).
 
 **Tier 3 — Full-stack features**
 
-6. Add `last_seen_at` to users: model change → autogenerate → **review the
+6. Fix the Interlude's honest gap: disable the RSVP buttons while a request
+   is in flight (mirror the `submitting` pattern from the forms). Frontend
+   only — and notice how the fix's *shape* was already in the codebase.
+7. Add `last_seen_at` to users: model change → autogenerate → **review the
    migration** → apply → update it on each authenticated request.
-7. Wire rate limiting on `/api/auth/login` (the one stack item still
+8. Wire rate limiting on `/api/auth/login` (the one stack item still
    unwired — this repo's known gap) and write a test proving the 6th rapid
    attempt gets 429.
 
 **Tier 4 — Judgment**
 
-8. Extract the RSVP/capacity logic into a `services/participation.py` and
+9. Extract the RSVP/capacity logic into a `services/participation.py` and
    watch the tests stay green — experience "behavioral tests enable
-   refactoring" firsthand. Then write three sentences: was the extraction
-   worth it *at this size*?
-9. Read every "deviation" and "revision" in [DECISIONS.md](DECISIONS.md)
-   and argue *against* one of them. If you can steelman both sides, you
-   understand the trade-off.
+   refactoring" firsthand. Then write three sentences arguing whether the
+   extraction was worth it *at this size* (Module 7, D5, has the standing
+   position — disagree with it if you can).
+10. Fix the capacity race from §6.3 (hint: `SELECT ... FOR UPDATE` on the
+    event row, or a trigger-enforced constraint). Then explain why writing
+    a *test* for it is genuinely hard.
+11. Read every "deviation" and "revision" in [DECISIONS.md](DECISIONS.md)
+    and argue *against* one of them. If you can steelman both sides, you
+    understand the trade-off.
 
 **The final exam** is a conversation: explain this system to someone —
-restaurant analogy to a non-engineer, request lifecycle to a junior dev,
-JWT-vs-database-sessions trade-off to an interviewer. When you can shift
-altitude on demand, this codebase is yours.
+restaurant analogy to a non-engineer, the Interlude's sixteen steps to a
+junior dev, D3's JWT-vs-database-sessions reversal to an interviewer. When
+you can shift altitude on demand, this codebase is yours.
