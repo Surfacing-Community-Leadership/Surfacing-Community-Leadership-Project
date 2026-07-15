@@ -52,7 +52,7 @@ export default function EventDetail() {
     setDialog(null);
     try {
       await api.del(`/api/events/${id}`);
-      navigate("/");
+      navigate("/map");
     } catch (err) {
       setActionError(err.message);
     }
@@ -72,7 +72,7 @@ export default function EventDetail() {
   return (
     <div className="detail-layout">
       <div className="detail-main">
-        <Link to="/" className="muted">
+        <Link to="/map" className="muted">
           ← Back to map
         </Link>
         <div className="card">

@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
@@ -21,6 +21,10 @@ from app.routers.deps import (
 from app.schemas.event import EventCreate, EventDetail, EventKind, EventSummary, EventUpdate
 
 router = APIRouter(prefix="/api/events", tags=["events"])
+
+# An event with no explicit end time is assumed to run this long, so one
+# created to start "right now" stays on the map instead of vanishing at once.
+DEFAULT_VISIBLE_HOURS = 3
 
 
 def _visibility_clause(user_id: uuid.UUID, my_community_id: uuid.UUID | None):
@@ -114,7 +118,23 @@ async def discover_events(
         stmt = stmt.where(Event.kind == kind)
     if community_id is not None:
         stmt = stmt.where(Event.community_id == community_id)
-    stmt = stmt.where(Event.starts_at >= (from_ or datetime.now(timezone.utc)))
+
+    now = datetime.now(timezone.utc)
+    if from_ is not None:
+        # Explicit range query: filter strictly by start time.
+        stmt = stmt.where(Event.starts_at >= from_)
+    else:
+        # Default map behavior: show events that haven't ENDED yet — ongoing
+        # and upcoming — so an event starting "now" doesn't disappear the
+        # moment it begins. With an end time, it's visible until it ends;
+        # without one, until DEFAULT_VISIBLE_HOURS after it starts.
+        grace_cutoff = now - timedelta(hours=DEFAULT_VISIBLE_HOURS)
+        stmt = stmt.where(
+            or_(
+                and_(Event.ends_at.isnot(None), Event.ends_at >= now),
+                and_(Event.ends_at.is_(None), Event.starts_at >= grace_cutoff),
+            )
+        )
     if to is not None:
         stmt = stmt.where(Event.starts_at <= to)
 

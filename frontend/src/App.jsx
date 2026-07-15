@@ -4,9 +4,11 @@ import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
 import Onboarding from "./pages/Onboarding.jsx";
+import Landing from "./pages/Landing.jsx";
 import MapHome from "./pages/MapHome.jsx";
 import EventDetail from "./pages/EventDetail.jsx";
 import CreateEvent from "./pages/CreateEvent.jsx";
+import MyEvents from "./pages/MyEvents.jsx";
 import Profile from "./pages/Profile.jsx";
 import PublicProfile from "./pages/PublicProfile.jsx";
 import Connections from "./pages/Connections.jsx";
@@ -16,6 +18,7 @@ export default function App() {
   return (
     <Routes>
       {/* Public routes */}
+      <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
 
@@ -27,9 +30,10 @@ export default function App() {
           </ProtectedRoute>
         }
       >
-        <Route path="/" element={<MapHome />} />
+        <Route path="/map" element={<MapHome />} />
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/events/new" element={<CreateEvent />} />
+        <Route path="/my-events" element={<MyEvents />} />
         <Route path="/events/:id" element={<EventDetail />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/profile/:userId" element={<PublicProfile />} />

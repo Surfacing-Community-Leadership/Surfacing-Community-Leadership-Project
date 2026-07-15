@@ -384,6 +384,106 @@ button.danger {
   border: 1px solid var(--line);
 }
 
+/* ---- Landing page ---- */
+.landing {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1.25rem;
+}
+.landing-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+}
+.landing-hero {
+  text-align: center;
+  padding: 3rem 1rem 2.5rem;
+}
+.landing-hero h1 {
+  font-size: 2.25rem;
+  margin-bottom: 0.75rem;
+}
+.landing-lede {
+  max-width: 560px;
+  margin: 0 auto 1.5rem;
+  font-size: 1.1rem;
+  color: var(--muted);
+}
+.landing-cta {
+  justify-content: center;
+}
+.landing-points {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.landing-point {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  text-align: center;
+}
+.landing-emoji {
+  font-size: 2rem;
+}
+.landing-point h2 {
+  font-size: 1rem;
+  margin: 0.5rem 0;
+}
+.landing-point p {
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin: 0;
+}
+.landing-footer {
+  text-align: center;
+  padding: 2.5rem 0 1rem;
+}
+@media (max-width: 700px) {
+  .landing-points {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- Address autocomplete ---- */
+.autocomplete {
+  position: relative;
+}
+.autocomplete-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 700; /* above the Leaflet map panes below it in the form */
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  max-height: 240px;
+  overflow-y: auto;
+}
+.autocomplete-list button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  color: var(--ink);
+  padding: 0.5rem 0.6rem;
+  font-size: 0.85rem;
+}
+.autocomplete-list button:hover {
+  background: var(--bg);
+}
+
 .avatar-lg {
   font-size: 3rem;
   line-height: 1;

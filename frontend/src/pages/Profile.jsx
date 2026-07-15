@@ -124,6 +124,7 @@ export default function Profile() {
         </button>
       </form>
       <p className="muted">
+        <Link to="/my-events">Your events</Link> ·{" "}
         Want to update your interests? <Link to="/onboarding">Redo the quick setup</Link>. ·{" "}
         <Link to="/blocks">Manage blocked users</Link>
       </p>

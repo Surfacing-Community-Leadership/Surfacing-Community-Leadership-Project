@@ -4,11 +4,21 @@ import { api } from "../api/client.js";
 import { useApi } from "../hooks/useApi.js";
 import Field from "../components/Field.jsx";
 import LocationPicker from "../components/LocationPicker.jsx";
+import AddressAutocomplete from "../components/AddressAutocomplete.jsx";
+import { useGeolocation } from "../hooks/useGeolocation.js";
 
-const FALLBACK_CENTER = [40.6552, -74.0069];
+// The current local wall-clock time as "YYYY-MM-DDTHH:MM" — the format a
+// datetime-local input's `min` expects. Shifting by the timezone offset makes
+// the UTC-based toISOString() read out local time.
+function localNow() {
+  const now = new Date();
+  return new Date(now - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
 
 export default function CreateEvent() {
   const navigate = useNavigate();
+  const here = useGeolocation(); // [lat, lng]; null until located
+  const minStart = localNow(); // no scheduling in the past
   const { data: interests } = useApi(() => api.get("/api/interests"));
 
   const [kind, setKind] = useState("gathering");
@@ -87,16 +97,31 @@ export default function CreateEvent() {
           />
         </Field>
 
-        <Field label="Location" hint="Click the map to place your pin.">
-          <LocationPicker
-            center={FALLBACK_CENTER}
-            value={location}
-            onPick={setLocation}
+        <Field
+          label="Address"
+          hint="Start typing to search; picking a result drops the map pin. Shown only to confirmed attendees."
+        >
+          <AddressAutocomplete
+            value={address}
+            onChange={setAddress}
+            onSelect={({ address: picked, lat, lng }) => {
+              setAddress(picked);
+              setLocation({ lat, lng });
+            }}
+            // Bias/restrict search to the placed pin, else wherever the user
+            // is (the same place the picker map opens to).
+            center={
+              location || (here ? { lat: here[0], lng: here[1] } : undefined)
+            }
           />
         </Field>
 
-        <Field label="Address" hint="Shown only to confirmed attendees.">
-          <input value={address} onChange={(e) => setAddress(e.target.value)} maxLength={500} />
+        <Field label="Location" hint="Click the map to fine-tune the exact spot.">
+          {here ? (
+            <LocationPicker center={here} value={location} onPick={setLocation} />
+          ) : (
+            <div className="picker-map centered muted">Locating…</div>
+          )}
         </Field>
 
         <div className="field-row">
@@ -104,6 +129,7 @@ export default function CreateEvent() {
             <input
               type="datetime-local"
               value={startsAt}
+              min={minStart}
               onChange={(e) => setStartsAt(e.target.value)}
               required
             />
@@ -112,6 +138,7 @@ export default function CreateEvent() {
             <input
               type="datetime-local"
               value={endsAt}
+              min={startsAt || minStart}
               onChange={(e) => setEndsAt(e.target.value)}
             />
           </Field>
