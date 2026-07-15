@@ -4,6 +4,7 @@ import { api } from "../api/client.js";
 import { useApi } from "../hooks/useApi.js";
 import Field from "../components/Field.jsx";
 import LocationPicker from "../components/LocationPicker.jsx";
+import AddressAutocomplete from "../components/AddressAutocomplete.jsx";
 
 const FALLBACK_CENTER = [40.6552, -74.0069];
 
@@ -87,16 +88,26 @@ export default function CreateEvent() {
           />
         </Field>
 
-        <Field label="Location" hint="Click the map to place your pin.">
+        <Field
+          label="Address"
+          hint="Start typing to search; picking a result drops the map pin. Shown only to confirmed attendees."
+        >
+          <AddressAutocomplete
+            value={address}
+            onChange={setAddress}
+            onSelect={({ address: picked, lat, lng }) => {
+              setAddress(picked);
+              setLocation({ lat, lng });
+            }}
+          />
+        </Field>
+
+        <Field label="Location" hint="Click the map to fine-tune the exact spot.">
           <LocationPicker
             center={FALLBACK_CENTER}
             value={location}
             onPick={setLocation}
           />
-        </Field>
-
-        <Field label="Address" hint="Shown only to confirmed attendees.">
-          <input value={address} onChange={(e) => setAddress(e.target.value)} maxLength={500} />
         </Field>
 
         <div className="field-row">

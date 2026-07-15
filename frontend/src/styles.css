@@ -384,6 +384,42 @@ button.danger {
   border: 1px solid var(--line);
 }
 
+/* ---- Address autocomplete ---- */
+.autocomplete {
+  position: relative;
+}
+.autocomplete-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 700; /* above the Leaflet map panes below it in the form */
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  max-height: 240px;
+  overflow-y: auto;
+}
+.autocomplete-list button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  color: var(--ink);
+  padding: 0.5rem 0.6rem;
+  font-size: 0.85rem;
+}
+.autocomplete-list button:hover {
+  background: var(--bg);
+}
+
 .avatar-lg {
   font-size: 3rem;
   line-height: 1;

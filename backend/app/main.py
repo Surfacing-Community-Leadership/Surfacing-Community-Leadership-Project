@@ -20,6 +20,7 @@ from app.routers import (
     communities,
     connections,
     events,
+    geocode,
     interests,
     messages,
     participants,
@@ -85,6 +86,7 @@ app.include_router(profiles.router)
 app.include_router(communities.router)
 app.include_router(interests.router)
 app.include_router(events.router)
+app.include_router(geocode.router)
 app.include_router(participants.router)
 app.include_router(connections.router)
 app.include_router(blocks.router)
