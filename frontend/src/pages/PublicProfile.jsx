@@ -51,7 +51,7 @@ export default function PublicProfile() {
 
   return (
     <div className="narrow">
-      <Link to="/" className="muted">
+      <Link to="/map" className="muted">
         ← Back
       </Link>
       <div className="card">

@@ -54,7 +54,7 @@ export default function Onboarding() {
       await api.put("/api/profiles/me/interests", {
         interest_ids: [...selected],
       });
-      navigate("/", { replace: true });
+      navigate("/map", { replace: true });
     } catch (err) {
       setSaveError(err.message);
       setSaving(false);
@@ -125,7 +125,7 @@ export default function Onboarding() {
 
       {saveError && <div className="alert">{saveError}</div>}
       <div className="row-actions">
-        <button className="secondary" onClick={() => navigate("/")} disabled={saving}>
+        <button className="secondary" onClick={() => navigate("/map")} disabled={saving}>
           Skip for now
         </button>
         <button onClick={finish} disabled={saving}>
