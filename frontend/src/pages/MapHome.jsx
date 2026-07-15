@@ -2,32 +2,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client.js";
 import MapView from "../components/MapView.jsx";
-
-// Falls back to Sunset Park, Brooklyn if the browser denies geolocation —
-// enough to render a useful map instead of an error.
-const FALLBACK_CENTER = [40.6552, -74.0069];
+import { useGeolocation } from "../hooks/useGeolocation.js";
 
 export default function MapHome() {
-  const [center, setCenter] = useState(null); // [lat, lng]; null until located
+  const center = useGeolocation(); // [lat, lng]; null until located
   const [events, setEvents] = useState([]);
   const [kind, setKind] = useState(""); // "", "gathering", "help_request"
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const mapRef = useRef(null);
-
-  // Resolve an initial center before first render so the map opens in the
-  // right place (MapContainer's center is only read once).
-  useEffect(() => {
-    if (!navigator.geolocation) {
-      setCenter(FALLBACK_CENTER);
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => setCenter([pos.coords.latitude, pos.coords.longitude]),
-      () => setCenter(FALLBACK_CENTER),
-      { timeout: 5000 },
-    );
-  }, []);
 
   const fetchEvents = useCallback(
     async (lat, lng, radiusM) => {

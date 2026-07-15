@@ -5,11 +5,11 @@ import { useApi } from "../hooks/useApi.js";
 import Field from "../components/Field.jsx";
 import LocationPicker from "../components/LocationPicker.jsx";
 import AddressAutocomplete from "../components/AddressAutocomplete.jsx";
-
-const FALLBACK_CENTER = [40.6552, -74.0069];
+import { useGeolocation } from "../hooks/useGeolocation.js";
 
 export default function CreateEvent() {
   const navigate = useNavigate();
+  const here = useGeolocation(); // [lat, lng]; null until located
   const { data: interests } = useApi(() => api.get("/api/interests"));
 
   const [kind, setKind] = useState("gathering");
@@ -99,18 +99,20 @@ export default function CreateEvent() {
               setAddress(picked);
               setLocation({ lat, lng });
             }}
-            // Bias/restrict search to the placed pin, else the neighborhood
-            // the map opens to.
-            center={location || { lat: FALLBACK_CENTER[0], lng: FALLBACK_CENTER[1] }}
+            // Bias/restrict search to the placed pin, else wherever the user
+            // is (the same place the picker map opens to).
+            center={
+              location || (here ? { lat: here[0], lng: here[1] } : undefined)
+            }
           />
         </Field>
 
         <Field label="Location" hint="Click the map to fine-tune the exact spot.">
-          <LocationPicker
-            center={FALLBACK_CENTER}
-            value={location}
-            onPick={setLocation}
-          />
+          {here ? (
+            <LocationPicker center={here} value={location} onPick={setLocation} />
+          ) : (
+            <div className="picker-map centered muted">Locating…</div>
+          )}
         </Field>
 
         <div className="field-row">
