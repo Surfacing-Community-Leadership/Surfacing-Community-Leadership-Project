@@ -99,6 +99,9 @@ export default function CreateEvent() {
               setAddress(picked);
               setLocation({ lat, lng });
             }}
+            // Bias/restrict search to the placed pin, else the neighborhood
+            // the map opens to.
+            center={location || { lat: FALLBACK_CENTER[0], lng: FALLBACK_CENTER[1] }}
           />
         </Field>
 

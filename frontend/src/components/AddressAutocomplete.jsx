@@ -6,10 +6,11 @@ import { api } from "../api/client.js";
 //   value     - the current address string (controlled by the parent)
 //   onChange  - called with the new text as the user types freely
 //   onSelect  - called with { address, lat, lng } when a suggestion is picked
+//   center    - { lat, lng } to restrict results to that region (optional)
 //
 // Debounced so we query the geocoder only after typing pauses — both kinder
 // to the user and required by Nominatim's usage policy (no per-keystroke hits).
-export default function AddressAutocomplete({ value, onChange, onSelect }) {
+export default function AddressAutocomplete({ value, onChange, onSelect, center }) {
   const [suggestions, setSuggestions] = useState([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -31,7 +32,12 @@ export default function AddressAutocomplete({ value, onChange, onSelect }) {
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const results = await api.get(`/api/geocode?q=${encodeURIComponent(value)}`);
+        const params = new URLSearchParams({ q: value });
+        if (center) {
+          params.set("lat", center.lat);
+          params.set("lng", center.lng);
+        }
+        const results = await api.get(`/api/geocode?${params}`);
         setSuggestions(results);
         setOpen(true);
       } catch {
