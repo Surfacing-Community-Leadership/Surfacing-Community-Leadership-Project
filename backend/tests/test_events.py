@@ -1,5 +1,7 @@
 """Events: creation, discovery, visibility, RSVPs, capacity, lifecycle."""
 
+from datetime import datetime, timedelta, timezone
+
 from tests.conftest import event_payload
 
 NEARBY = "/api/events?lat=40.6552&lng=-74.0069&radius_m=3000"
@@ -142,6 +144,40 @@ async def test_discovery_pagination(make_user):
     assert len(page1) == 2
     assert len(page2) == 1
     assert {e["id"] for e in page1}.isdisjoint({e["id"] for e in page2})
+
+
+async def test_event_happening_now_still_shows(make_user):
+    # Regression: an event created to start a few minutes ago (i.e. now) must
+    # not vanish from the map — it's ongoing, not past.
+    dylan = await make_user("dylan@example.com", "Dylan")
+    recent = (datetime.now(timezone.utc) - timedelta(minutes=20)).isoformat()
+    await dylan.post("/api/events", json=event_payload(title="Bagels now", starts_at=recent))
+    found = (await dylan.get(NEARBY)).json()
+    assert any(e["title"] == "Bagels now" for e in found)
+
+
+async def test_long_finished_event_hidden(make_user):
+    # An event whose (assumed) end is well in the past should drop off.
+    dylan = await make_user("dylan@example.com", "Dylan")
+    old = (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat()
+    await dylan.post("/api/events", json=event_payload(title="This morning", starts_at=old))
+    found = (await dylan.get(NEARBY)).json()
+    assert not any(e["title"] == "This morning" for e in found)
+
+
+async def test_ongoing_event_with_end_time_shows_until_it_ends(make_user):
+    # Started an hour ago, ends in an hour → still ongoing → visible.
+    dylan = await make_user("dylan@example.com", "Dylan")
+    started = datetime.now(timezone.utc) - timedelta(hours=1)
+    ends = datetime.now(timezone.utc) + timedelta(hours=1)
+    await dylan.post(
+        "/api/events",
+        json=event_payload(
+            title="Long picnic", starts_at=started.isoformat(), ends_at=ends.isoformat()
+        ),
+    )
+    found = (await dylan.get(NEARBY)).json()
+    assert any(e["title"] == "Long picnic" for e in found)
 
 
 async def test_my_events_lists_only_my_creations(make_user):
