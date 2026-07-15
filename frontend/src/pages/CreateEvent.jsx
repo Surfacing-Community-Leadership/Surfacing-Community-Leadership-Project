@@ -7,9 +7,18 @@ import LocationPicker from "../components/LocationPicker.jsx";
 import AddressAutocomplete from "../components/AddressAutocomplete.jsx";
 import { useGeolocation } from "../hooks/useGeolocation.js";
 
+// The current local wall-clock time as "YYYY-MM-DDTHH:MM" — the format a
+// datetime-local input's `min` expects. Shifting by the timezone offset makes
+// the UTC-based toISOString() read out local time.
+function localNow() {
+  const now = new Date();
+  return new Date(now - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
 export default function CreateEvent() {
   const navigate = useNavigate();
   const here = useGeolocation(); // [lat, lng]; null until located
+  const minStart = localNow(); // no scheduling in the past
   const { data: interests } = useApi(() => api.get("/api/interests"));
 
   const [kind, setKind] = useState("gathering");
@@ -120,6 +129,7 @@ export default function CreateEvent() {
             <input
               type="datetime-local"
               value={startsAt}
+              min={minStart}
               onChange={(e) => setStartsAt(e.target.value)}
               required
             />
@@ -128,6 +138,7 @@ export default function CreateEvent() {
             <input
               type="datetime-local"
               value={endsAt}
+              min={startsAt || minStart}
               onChange={(e) => setEndsAt(e.target.value)}
             />
           </Field>
