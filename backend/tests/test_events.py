@@ -142,3 +142,25 @@ async def test_discovery_pagination(make_user):
     assert len(page1) == 2
     assert len(page2) == 1
     assert {e["id"] for e in page1}.isdisjoint({e["id"] for e in page2})
+
+
+async def test_my_events_lists_only_my_creations(make_user):
+    dylan = await make_user("dylan@example.com", "Dylan")
+    eleanor = await make_user("eleanor@example.com", "Eleanor")
+    await dylan.post("/api/events", json=event_payload(title="Mine A"))
+    await dylan.post("/api/events", json=event_payload(kind="help_request", title="Mine B"))
+    await eleanor.post("/api/events", json=event_payload(title="Not mine"))
+
+    mine = (await dylan.get("/api/users/me/events")).json()
+    assert {e["title"] for e in mine} == {"Mine A", "Mine B"}
+
+
+async def test_my_events_includes_cancelled(make_user):
+    # Unlike the map, this list shows events in any status.
+    dylan = await make_user("dylan@example.com", "Dylan")
+    ev = (await dylan.post("/api/events", json=event_payload(title="Called off"))).json()
+    await dylan.patch(f"/api/events/{ev['id']}", json={"status": "cancelled"})
+
+    mine = (await dylan.get("/api/users/me/events")).json()
+    assert [e["title"] for e in mine] == ["Called off"]
+    assert mine[0]["status"] == "cancelled"
