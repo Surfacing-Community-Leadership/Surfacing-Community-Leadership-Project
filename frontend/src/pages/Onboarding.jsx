@@ -2,20 +2,19 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client.js";
 import { useApi } from "../hooks/useApi.js";
-import Field from "../components/Field.jsx";
+import CommunityPicker from "../components/CommunityPicker.jsx";
 
 // Optional first-run step, also reachable later as "edit preferences" —
 // it pre-fills whatever the user chose before, so nothing gets lost.
 export default function Onboarding() {
   const navigate = useNavigate();
   const { data, loading, error } = useApi(async () => {
-    const [interests, communities, profile, myInterests] = await Promise.all([
+    const [interests, profile, myInterests] = await Promise.all([
       api.get("/api/interests"),
-      api.get("/api/communities"),
       api.get("/api/profiles/me"),
       api.get("/api/profiles/me/interests"),
     ]);
-    return { interests, communities, profile, myInterests };
+    return { interests, profile, myInterests };
   });
 
   const [selected, setSelected] = useState(new Set());
@@ -74,16 +73,7 @@ export default function Onboarding() {
 
       <section className="card">
         <h2>Your neighborhood</h2>
-        <Field label="Community">
-          <select value={communityId} onChange={(e) => setCommunityId(e.target.value)}>
-            <option value="">Choose later</option>
-            {data.communities.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </Field>
+        <CommunityPicker value={communityId} onChange={setCommunityId} />
       </section>
 
       <section className="card">

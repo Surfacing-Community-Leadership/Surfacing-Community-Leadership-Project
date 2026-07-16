@@ -127,6 +127,40 @@ from the written spec; everything else fills a gap the spec left open.
 - **A real pytest suite** (24 tests) against a disposable `ours_test`
   database created per run — see `backend/tests/`.
 
+## Revisions — 2026-07-16 (dynamic communities from OpenStreetMap)
+
+- **Communities are sourced live from OpenStreetMap**, not a fixed seed list.
+  `GET /api/communities/nearby?lat&lng&radius` proxies the **Overpass API**
+  for `place` nodes (neighbourhood/suburb/quarter/borough) around the user and
+  returns them **nearest-first**. Proxied server-side for the same reasons as
+  geocoding: an identifying User-Agent and a swappable provider.
+- **Lazy materialization (find-or-create on select)** reconciles an external
+  source with our relational FK model. `/nearby` returns *candidates* (name +
+  center + `osm_ref`), which are **not** rows. Only when a user picks one does
+  `POST /api/communities` create a row keyed by a new unique `osm_ref` column
+  (migration `9a3f7c2b1e04`), minting the UUID that `profiles.community_id`
+  references. The table becomes a lazily-grown cache of neighborhoods someone
+  actually joined — we never mirror all of OSM. Idempotent per `osm_ref`
+  (two users picking the same neighborhood share one row; a concurrent
+  double-insert is caught via `IntegrityError` and reused).
+- **The seeded Sunset Park carries its real `osm_ref`** (`node/3343148003`)
+  so picking it from the live list reuses the seed row instead of duplicating.
+- **`POST` trusts only the `osm_ref`, not the client's name/center.** The name
+  and center come from OSM, so a caller can't invent a community. `osm_ref` is
+  pattern-validated `(node|way|relation)/<digits>` — it is interpolated into an
+  Overpass query, and the pattern blocks injection.
+- **A 30-minute in-memory candidate cache** keyed by `osm_ref` removes the
+  second Overpass call at save time. Overpass rate-limits aggressively (~1 req
+  / 10–15s per IP), and a live call *at the moment a user commits* is the worst
+  place for flakiness. `/nearby` caches what it hands out; `POST` reads the
+  cache when warm and only falls back to a live lookup-by-id on a miss. The
+  cache is per-process and lost on restart — fine for the MVP; the OSM fallback
+  covers every miss. Total Overpass outage degrades to a clean 503, never a 500.
+- **Onboarding's community `<select>` was replaced by `CommunityPicker`**,
+  which uses the shared `useGeolocation` hook, lists neighborhoods nearest
+  first, offers "Search a wider area" (3 → 8 → 20 km) and "Choose later", and
+  materializes the pick (POST) before handing the UUID to the profile PATCH.
+
 ## Deferred (known gaps to discuss)
 
 - Rate limiting is in the stack but still not wired.

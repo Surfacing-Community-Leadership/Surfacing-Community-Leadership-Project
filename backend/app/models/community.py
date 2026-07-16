@@ -17,6 +17,10 @@ class Community(Base):
     )
     name: Mapped[str] = mapped_column(Text)
     slug: Mapped[str] = mapped_column(Text, unique=True)
+    # Stable reference to the OpenStreetMap element this community was
+    # materialized from, e.g. "node/1234567". NULL for hand-seeded rows.
+    # Unique so two people picking the same neighborhood reuse one row.
+    osm_ref: Mapped[str | None] = mapped_column(Text, unique=True)
     center: Mapped[WKBElement | None] = mapped_column(
         Geography(geometry_type="POINT", srid=4326, spatial_index=False)
     )

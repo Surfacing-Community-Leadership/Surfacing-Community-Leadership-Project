@@ -219,10 +219,13 @@ async def main() -> None:
                 "starter interests are seeded."
             )
 
-        # 2. The community everyone belongs to.
+        # 2. The community everyone belongs to. osm_ref matches the real
+        # OpenStreetMap node so that a user picking "Sunset Park" from the
+        # live neighborhood list reuses this row instead of duplicating it.
         community = Community(
             name="Sunset Park",
             slug="sunset-park",
+            osm_ref="node/3343148003",
             center=wkt_point(*CENTER),
         )
         session.add(community)
