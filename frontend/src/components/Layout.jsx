@@ -15,7 +15,7 @@ export default function Layout() {
   return (
     <div className="app-shell">
       <header className="topnav">
-        <NavLink to="/map" className="brand">
+        <NavLink to="/" className="brand">
           Ours
         </NavLink>
         <nav>
