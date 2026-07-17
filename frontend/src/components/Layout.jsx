@@ -21,7 +21,7 @@ export default function Layout() {
         <nav>
           <NavLink to="/map">Map</NavLink>
           <NavLink to="/events/new">Create</NavLink>
-          <NavLink to="/my-events">My events</NavLink>
+          <NavLink to="/my-events">Events</NavLink>
           <NavLink to="/connections">Connections</NavLink>
           <NavLink to="/profile">Profile</NavLink>
         </nav>

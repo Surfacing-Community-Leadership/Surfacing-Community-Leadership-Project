@@ -191,12 +191,42 @@ async def test_my_events_lists_only_my_creations(make_user):
     assert {e["title"] for e in mine} == {"Mine A", "Mine B"}
 
 
-async def test_my_events_includes_cancelled(make_user):
-    # Unlike the map, this list shows events in any status.
+async def test_my_events_excludes_cancelled(make_user):
+    # Cancelled events drop off the personal Events page.
     dylan = await make_user("dylan@example.com", "Dylan")
     ev = (await dylan.post("/api/events", json=event_payload(title="Called off"))).json()
+    await dylan.post("/api/events", json=event_payload(title="Still on"))
     await dylan.patch(f"/api/events/{ev['id']}", json={"status": "cancelled"})
 
     mine = (await dylan.get("/api/users/me/events")).json()
-    assert [e["title"] for e in mine] == ["Called off"]
-    assert mine[0]["status"] == "cancelled"
+    assert [e["title"] for e in mine] == ["Still on"]
+
+
+async def test_attending_lists_going_and_maybe_with_rsvp(make_user):
+    host = await make_user("host@example.com", "Host")
+    goer = await make_user("goer@example.com", "Goer")
+    going = (await host.post("/api/events", json=event_payload(title="Going one"))).json()
+    maybe = (await host.post("/api/events", json=event_payload(title="Maybe one"))).json()
+    declined = (await host.post("/api/events", json=event_payload(title="Declined one"))).json()
+    await goer.put(f"/api/events/{going['id']}/rsvp", json={"status": "going"})
+    await goer.put(f"/api/events/{maybe['id']}/rsvp", json={"status": "maybe"})
+    await goer.put(f"/api/events/{declined['id']}/rsvp", json={"status": "declined"})
+
+    attending = (await goer.get("/api/users/me/attending")).json()
+    # going + maybe show (with their RSVP labelled), declined does not.
+    assert {e["title"]: e["my_rsvp"] for e in attending} == {
+        "Going one": "going",
+        "Maybe one": "maybe",
+    }
+    # The host isn't attending their own events.
+    assert (await host.get("/api/users/me/attending")).json() == []
+
+
+async def test_attending_excludes_cancelled(make_user):
+    host = await make_user("host@example.com", "Host")
+    goer = await make_user("goer@example.com", "Goer")
+    ev = (await host.post("/api/events", json=event_payload(title="Off now"))).json()
+    await goer.put(f"/api/events/{ev['id']}/rsvp", json={"status": "going"})
+    await host.patch(f"/api/events/{ev['id']}", json={"status": "cancelled"})
+
+    assert (await goer.get("/api/users/me/attending")).json() == []

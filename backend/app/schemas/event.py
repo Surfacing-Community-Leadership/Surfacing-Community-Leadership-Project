@@ -53,6 +53,8 @@ class EventSummary(BaseModel):
     visibility: str
     status: str
     distance_m: float | None = None
+    # The viewer's own RSVP ("going"/"maybe"), set only by the "going to" list.
+    my_rsvp: str | None = None
 
 
 class EventDetail(BaseModel):

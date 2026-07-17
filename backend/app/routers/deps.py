@@ -1,10 +1,11 @@
 """Shared dependencies and permission helpers used across routers."""
 
 import uuid
+from datetime import datetime, timedelta
 from typing import Annotated
 
 from fastapi import Depends, HTTPException
-from sqlalchemy import case, or_, select
+from sqlalchemy import and_, case, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import current_active_user
@@ -18,6 +19,22 @@ CurrentUser = Annotated[User, Depends(current_active_user)]
 ACTIVE_PARTICIPANT_STATUSES = ("invited", "going", "maybe", "attended")
 # States that count toward capacity and reveal the address.
 CONFIRMED_PARTICIPANT_STATUSES = ("going", "attended")
+
+# An event with no explicit end time is assumed to run this long, so one
+# created to start "right now" isn't treated as already over.
+DEFAULT_VISIBLE_HOURS = 3
+
+
+def not_ended_clause(now: datetime):
+    """Events that haven't ENDED yet — ongoing or upcoming. With an end time,
+    an event lasts until it ends; without one, until DEFAULT_VISIBLE_HOURS
+    after it starts. Shared by the map and the personal Events page so the two
+    agree on what "over" means."""
+    grace_cutoff = now - timedelta(hours=DEFAULT_VISIBLE_HOURS)
+    return or_(
+        and_(Event.ends_at.isnot(None), Event.ends_at >= now),
+        and_(Event.ends_at.is_(None), Event.starts_at >= grace_cutoff),
+    )
 
 
 async def get_event_or_404(db: AsyncSession, event_id: uuid.UUID) -> Event:
