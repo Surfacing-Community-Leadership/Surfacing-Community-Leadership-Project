@@ -23,6 +23,8 @@ def _summary(e: Event, my_rsvp: str | None = None) -> EventSummary:
         visibility=e.visibility,
         status=e.status,
         my_rsvp=my_rsvp,
+        tag_slug=e.tag.slug if e.tag else None,
+        tag_name=e.tag.name if e.tag else None,
     )
 
 

@@ -298,21 +298,29 @@ button.danger {
   justify-content: space-between;
 }
 
-/* ---- Map pins / dots ---- */
-/* .pin-wrap is the element Leaflet positions; the visible dot is the inner
-   .pin span so we can scale it on hover without touching Leaflet's transform. */
+/* ---- Map pins ---- */
+/* .pin-wrap is the element Leaflet positions; the visible circle is the inner
+   .pin span so we can scale it on hover without touching Leaflet's transform.
+   Border color = event kind, emoji = category tag. */
 .pin {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  border: 2px solid #fff;
+  background: #fff;
+  border: 3px solid var(--line);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
   transform-origin: center;
   transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
+.pin-emoji {
+  font-size: 15px;
+  line-height: 1;
+}
 .pin-wrap:hover .pin {
-  transform: scale(1.6);
+  transform: scale(1.5);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
 }
 /* Lift the hovered pin above its neighbors (Leaflet sets z-index inline). */
@@ -320,10 +328,10 @@ button.danger {
   z-index: 1000 !important;
 }
 .pin-gathering {
-  background: var(--gathering);
+  border-color: var(--gathering);
 }
 .pin-help {
-  background: var(--help);
+  border-color: var(--help);
 }
 
 /* Hover tooltip: a compact peek at the event. */
@@ -367,6 +375,12 @@ button.danger {
 }
 .tag-help_request {
   background: var(--help);
+}
+.tag-category {
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  margin-left: 0.35rem;
 }
 
 /* ---- Messages ---- */

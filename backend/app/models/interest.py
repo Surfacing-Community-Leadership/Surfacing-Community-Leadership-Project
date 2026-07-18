@@ -17,6 +17,8 @@ class Interest(Base):
     slug: Mapped[str] = mapped_column(Text, unique=True)
 
 
+# Users still have many interests (their profile tags). Events, by contrast,
+# carry a single category via events.tag_id — see the Event model.
 user_interests = Table(
     "user_interests",
     Base.metadata,
@@ -24,23 +26,6 @@ user_interests = Table(
         "user_id",
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
-        primary_key=True,
-    ),
-    Column(
-        "interest_id",
-        UUID(as_uuid=True),
-        ForeignKey("interests.id", ondelete="CASCADE"),
-        primary_key=True,
-    ),
-)
-
-event_interests = Table(
-    "event_interests",
-    Base.metadata,
-    Column(
-        "event_id",
-        UUID(as_uuid=True),
-        ForeignKey("events.id", ondelete="CASCADE"),
         primary_key=True,
     ),
     Column(

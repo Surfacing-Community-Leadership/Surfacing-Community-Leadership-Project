@@ -4,6 +4,7 @@ import { api } from "../api/client.js";
 import { useApi } from "../hooks/useApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { ConfirmDialog, ReportDialog } from "../components/dialogs.jsx";
+import { tagIcon } from "../lib/tagIcons.js";
 
 const ACTIVE = ["invited", "going", "maybe", "attended"];
 
@@ -79,6 +80,11 @@ export default function EventDetail() {
           <span className={`tag tag-${event.kind}`}>
             {event.kind === "help_request" ? "Help request" : "Gathering"}
           </span>
+          {event.tag_name && (
+            <span className="tag tag-category">
+              {tagIcon(event.tag_slug)} {event.tag_name}
+            </span>
+          )}
           <h1>{event.title}</h1>
           <p className="muted">
             {new Date(event.starts_at).toLocaleString()}

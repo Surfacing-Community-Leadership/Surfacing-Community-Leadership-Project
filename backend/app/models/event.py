@@ -13,9 +13,10 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.models.interest import Interest
 
 
 class Event(Base):
@@ -51,6 +52,14 @@ class Event(Base):
     community_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("communities.id", ondelete="SET NULL")
     )
+    # A single category (drawn from the interests taxonomy) that drives the
+    # map pin's icon. SET NULL so deleting an interest just untags events.
+    tag_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("interests.id", ondelete="SET NULL")
+    )
+    # Eager-loaded (LEFT JOIN) so event.tag is always available after a query —
+    # async has no lazy attribute loading, and every list needs the tag's slug.
+    tag: Mapped[Interest | None] = relationship("Interest", lazy="joined")
     title: Mapped[str] = mapped_column(Text)
     description: Mapped[str | None] = mapped_column(Text)
     location: Mapped[WKBElement] = mapped_column(

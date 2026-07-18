@@ -180,6 +180,44 @@ async def test_ongoing_event_with_end_time_shows_until_it_ends(make_user):
     assert any(e["title"] == "Long picnic" for e in found)
 
 
+async def test_event_tag_flows_to_summary_detail_and_map(make_user, interest_id):
+    dylan = await make_user("dylan@example.com", "Dylan")
+    created = (
+        await dylan.post(
+            "/api/events", json=event_payload(title="Garden day", tag_id=interest_id)
+        )
+    ).json()
+    # Create response (an EventSummary) carries the tag.
+    assert created["tag_slug"] == "gardening"
+    assert created["tag_name"] == "Gardening"
+
+    # Detail view carries it too.
+    detail = (await dylan.get(f"/api/events/{created['id']}")).json()
+    assert detail["tag_slug"] == "gardening"
+
+    # And so does the map/discovery query (exercises the joined tag load).
+    found = (await dylan.get(NEARBY)).json()
+    mine = next(e for e in found if e["id"] == created["id"])
+    assert mine["tag_slug"] == "gardening"
+    assert mine["tag_name"] == "Gardening"
+
+
+async def test_event_without_tag_has_null_tag(make_user):
+    dylan = await make_user("dylan@example.com", "Dylan")
+    ev = (await dylan.post("/api/events", json=event_payload())).json()
+    assert ev["tag_slug"] is None
+    assert ev["tag_name"] is None
+
+
+async def test_event_rejects_unknown_tag(make_user):
+    dylan = await make_user("dylan@example.com", "Dylan")
+    r = await dylan.post(
+        "/api/events",
+        json=event_payload(tag_id="00000000-0000-0000-0000-000000000000"),
+    )
+    assert r.status_code == 422
+
+
 async def test_my_events_lists_only_my_creations(make_user):
     dylan = await make_user("dylan@example.com", "Dylan")
     eleanor = await make_user("eleanor@example.com", "Eleanor")

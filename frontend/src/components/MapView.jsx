@@ -9,25 +9,37 @@ import {
 } from "react-leaflet";
 import { useNavigate } from "react-router-dom";
 import L from "leaflet";
+import { tagIcon } from "../lib/tagIcons.js";
 
-// Wireframe markers: a colored dot per event kind. Using divIcon sidesteps
-// the classic Leaflet-with-bundlers broken-image-path problem entirely.
+// Markers: a circle whose border color is the event kind (green gathering /
+// orange help) with the tag's emoji in the middle — so one pin conveys both.
+// Using divIcon sidesteps the classic Leaflet-with-bundlers broken-image-path
+// problem entirely.
 //
-// The visible dot is an *inner* <span>, not the icon element itself: Leaflet
+// The visible circle is an *inner* <span>, not the icon element itself: Leaflet
 // positions the icon element with its own `transform: translate3d(...)`, so
-// scaling it on hover (below, in CSS) would clobber that and fling the pin to
-// the map's origin. Scaling the inner span leaves Leaflet's transform alone.
-const makeIcon = (suffix) =>
-  L.divIcon({
-    className: "pin-wrap",
-    html: `<span class="pin pin-${suffix}"></span>`,
-    iconSize: [16, 16],
-    iconAnchor: [8, 8],
-  });
-const ICONS = {
-  gathering: makeIcon("gathering"),
-  help_request: makeIcon("help"),
-};
+// scaling it on hover (in CSS) would clobber that and fling the pin to the
+// map's origin. Scaling the inner span leaves Leaflet's transform alone.
+//
+// Icons are cached by "kind|tagSlug" so panning/re-rendering reuses them
+// instead of allocating a fresh divIcon per marker every render.
+const iconCache = new Map();
+
+function pinIcon(kind, tagSlug) {
+  const key = `${kind}|${tagSlug || ""}`;
+  let icon = iconCache.get(key);
+  if (!icon) {
+    const suffix = kind === "help_request" ? "help" : "gathering";
+    icon = L.divIcon({
+      className: "pin-wrap",
+      html: `<span class="pin pin-${suffix}"><span class="pin-emoji">${tagIcon(tagSlug)}</span></span>`,
+      iconSize: [30, 30],
+      iconAnchor: [15, 15],
+    });
+    iconCache.set(key, icon);
+  }
+  return icon;
+}
 
 function kindLabel(kind) {
   return kind === "help_request" ? "Help request" : "Gathering";
@@ -71,15 +83,16 @@ export default function MapView({ center, events, onReady, onMoveEnd }) {
         <Marker
           key={ev.id}
           position={[ev.location.lat, ev.location.lng]}
-          icon={ICONS[ev.kind] || ICONS.gathering}
+          icon={pinIcon(ev.kind, ev.tag_slug)}
           eventHandlers={{ click: () => navigate(`/events/${ev.id}`) }}
         >
           {/* Hover: a quick peek. Shows on mouseover, hides on mouseout.
               Clicking the pin goes straight to the event's page. */}
-          <Tooltip direction="top" offset={[0, -10]} opacity={1} className="pin-tip">
+          <Tooltip direction="top" offset={[0, -14]} opacity={1} className="pin-tip">
             <strong>{ev.title}</strong>
             <div className="muted">
-              {kindLabel(ev.kind)} · {formatWhen(ev.starts_at)}
+              {kindLabel(ev.kind)}
+              {ev.tag_name && ` · ${ev.tag_name}`} · {formatWhen(ev.starts_at)}
               {ev.distance_m != null && ` · ${formatDistance(ev.distance_m)}`}
             </div>
             {ev.status !== "open" && <div className="muted">{ev.status}</div>}

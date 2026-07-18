@@ -6,6 +6,7 @@ import Field from "../components/Field.jsx";
 import LocationPicker from "../components/LocationPicker.jsx";
 import AddressAutocomplete from "../components/AddressAutocomplete.jsx";
 import { useGeolocation } from "../hooks/useGeolocation.js";
+import { tagIcon } from "../lib/tagIcons.js";
 
 // The current local wall-clock time as "YYYY-MM-DDTHH:MM" — the format a
 // datetime-local input's `min` expects. Shifting by the timezone offset makes
@@ -30,17 +31,9 @@ export default function CreateEvent() {
   const [endsAt, setEndsAt] = useState("");
   const [visibility, setVisibility] = useState("public");
   const [capacity, setCapacity] = useState("");
-  const [selectedInterests, setSelectedInterests] = useState(new Set());
+  const [tagId, setTagId] = useState(""); // single category; "" means none
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-
-  function toggleInterest(id) {
-    setSelectedInterests((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -62,7 +55,7 @@ export default function CreateEvent() {
         ends_at: endsAt ? new Date(endsAt).toISOString() : null,
         visibility,
         capacity: capacity ? Number(capacity) : null,
-        interest_ids: [...selectedInterests],
+        tag_id: tagId || null,
       });
       navigate(`/events/${created.id}`);
     } catch (err) {
@@ -163,16 +156,17 @@ export default function CreateEvent() {
         </div>
 
         {interests && (
-          <Field label="Tags">
+          <Field label="Category" hint="Pick one — it sets the event's map icon.">
             <div className="chip-grid">
               {interests.map((i) => (
                 <button
                   type="button"
                   key={i.id}
-                  className={selectedInterests.has(i.id) ? "chip chip-on" : "chip"}
-                  onClick={() => toggleInterest(i.id)}
+                  className={tagId === i.id ? "chip chip-on" : "chip"}
+                  // Click the selected one again to clear it (category is optional).
+                  onClick={() => setTagId((cur) => (cur === i.id ? "" : i.id))}
                 >
-                  {i.name}
+                  {tagIcon(i.slug)} {i.name}
                 </button>
               ))}
             </div>

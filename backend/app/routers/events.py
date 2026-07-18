@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import and_, func, or_, select
 
 from app.core.geo import to_latlng, wkt_point
-from app.models import Community, Event, EventParticipant, Interest, event_interests
+from app.models import Community, Event, EventParticipant, Interest
 from app.routers.deps import (
     ALLOWED_STATUS_TRANSITIONS,
     CONFIRMED_PARTICIPANT_STATUSES,
@@ -59,19 +59,26 @@ def _summary(event: Event, distance_m: float | None = None) -> EventSummary:
         visibility=event.visibility,
         status=event.status,
         distance_m=round(distance_m, 1) if distance_m is not None else None,
+        tag_slug=event.tag.slug if event.tag else None,
+        tag_name=event.tag.name if event.tag else None,
     )
 
 
-async def _validate_refs(db, community_id, interest_ids) -> None:
-    if community_id is not None:
-        if await db.get(Community, community_id) is None:
-            raise HTTPException(status_code=422, detail="Unknown community")
-    if interest_ids:
-        found = await db.scalar(
-            select(func.count()).select_from(Interest).where(Interest.id.in_(interest_ids))
-        )
-        if found != len(interest_ids):
-            raise HTTPException(status_code=422, detail="Unknown interest id")
+async def _resolve_tag(db, tag_id) -> Interest | None:
+    """Validate the tag id and return the Interest so it can be assigned to the
+    event's relationship directly — that keeps event.tag populated in memory,
+    avoiding an async lazy-load after commit."""
+    if tag_id is None:
+        return None
+    tag = await db.get(Interest, tag_id)
+    if tag is None:
+        raise HTTPException(status_code=422, detail="Unknown tag")
+    return tag
+
+
+async def _validate_community(db, community_id) -> None:
+    if community_id is not None and await db.get(Community, community_id) is None:
+        raise HTTPException(status_code=422, detail="Unknown community")
 
 
 @router.get("", response_model=list[EventSummary])
@@ -133,12 +140,14 @@ async def discover_events(
 
 @router.post("", response_model=EventSummary, status_code=201)
 async def create_event(payload: EventCreate, db: DB, user: CurrentUser):
-    await _validate_refs(db, payload.community_id, payload.interest_ids)
+    await _validate_community(db, payload.community_id)
+    tag = await _resolve_tag(db, payload.tag_id)
 
     event = Event(
         kind=payload.kind,
         host_id=user.id,
         community_id=payload.community_id,
+        tag=tag,  # assigning the object also sets tag_id and keeps it loaded
         title=payload.title,
         description=payload.description,
         location=wkt_point(payload.location.lat, payload.location.lng),
@@ -149,14 +158,11 @@ async def create_event(payload: EventCreate, db: DB, user: CurrentUser):
         capacity=payload.capacity,
     )
     db.add(event)
-    await db.flush()  # assigns event.id without ending the transaction
-    if payload.interest_ids:
-        await db.execute(
-            event_interests.insert(),
-            [{"event_id": event.id, "interest_id": iid} for iid in set(payload.interest_ids)],
-        )
     await db.commit()
-    await db.refresh(event)  # load server defaults (status, timestamps)
+    # Reload the server-default status and the location as a proper geometry
+    # (we assigned it as a WKT string). Naming attributes avoids re-expiring —
+    # and async-lazy-loading — the tag relationship we assigned above.
+    await db.refresh(event, attribute_names=["status", "location"])
     return _summary(event)
 
 
@@ -201,6 +207,8 @@ async def read_event(event_id: uuid.UUID, db: DB, user: CurrentUser):
         source=event.source,
         external_url=event.external_url,
         participant_count=participant_count,
+        tag_slug=event.tag.slug if event.tag else None,
+        tag_name=event.tag.name if event.tag else None,
     )
 
 
