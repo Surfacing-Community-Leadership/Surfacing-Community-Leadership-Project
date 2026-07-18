@@ -137,6 +137,9 @@ export default function EventDetail() {
 
           {isHost && (
             <div className="row-actions">
+              <button className="secondary" onClick={() => navigate(`/events/${id}/edit`)}>
+                Edit
+              </button>
               <button className="secondary" onClick={cancelEvent}>
                 Cancel event
               </button>

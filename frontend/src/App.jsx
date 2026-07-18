@@ -8,6 +8,7 @@ import Landing from "./pages/Landing.jsx";
 import MapHome from "./pages/MapHome.jsx";
 import EventDetail from "./pages/EventDetail.jsx";
 import CreateEvent from "./pages/CreateEvent.jsx";
+import EditEvent from "./pages/EditEvent.jsx";
 import MyEvents from "./pages/MyEvents.jsx";
 import Profile from "./pages/Profile.jsx";
 import PublicProfile from "./pages/PublicProfile.jsx";
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="/events/new" element={<CreateEvent />} />
         <Route path="/my-events" element={<MyEvents />} />
         <Route path="/events/:id" element={<EventDetail />} />
+        <Route path="/events/:id/edit" element={<EditEvent />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/profile/:userId" element={<PublicProfile />} />
         <Route path="/connections" element={<Connections />} />

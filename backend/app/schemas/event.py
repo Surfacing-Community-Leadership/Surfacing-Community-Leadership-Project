@@ -40,6 +40,7 @@ class EventUpdate(BaseModel):
     ends_at: datetime | None = None
     visibility: EventVisibility | None = None
     capacity: int | None = Field(None, gt=0)
+    tag_id: uuid.UUID | None = None
     status: EventStatus | None = None
 
 
@@ -77,5 +78,6 @@ class EventDetail(BaseModel):
     source: str
     external_url: str | None
     participant_count: int
+    tag_id: uuid.UUID | None = None
     tag_slug: str | None = None
     tag_name: str | None = None
