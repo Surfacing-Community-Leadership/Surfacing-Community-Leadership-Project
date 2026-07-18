@@ -180,6 +180,60 @@ async def test_ongoing_event_with_end_time_shows_until_it_ends(make_user):
     assert any(e["title"] == "Long picnic" for e in found)
 
 
+async def test_discovery_filters_by_tag(make_user, interest_id):
+    host = await make_user("host@example.com", "Host")
+    tagged = (
+        await host.post("/api/events", json=event_payload(title="Garden day", tag_id=interest_id))
+    ).json()
+    await host.post("/api/events", json=event_payload(title="Untagged"))
+
+    found = (await host.get(f"{NEARBY}&tag_id={interest_id}")).json()
+    titles = {e["title"] for e in found}
+    assert titles == {"Garden day"}
+
+
+async def test_discovery_matching_interests(make_user, interest_id):
+    user = await make_user("u@example.com", "U")
+    await user.put("/api/profiles/me/interests", json={"interest_ids": [interest_id]})
+    match = (
+        await user.post("/api/events", json=event_payload(title="Matches", tag_id=interest_id))
+    ).json()
+    await user.post("/api/events", json=event_payload(title="No tag"))
+
+    found = (await user.get(f"{NEARBY}&matching_interests=true")).json()
+    titles = {e["title"] for e in found}
+    assert titles == {"Matches"}
+
+
+async def test_community_event_visible_to_fellow_member(make_user, community_id):
+    host = await make_user("host@example.com", "Host")
+    member = await make_user("member@example.com", "Member")
+    for c in (host, member):
+        await c.patch("/api/profiles/me", json={"community_id": community_id})
+
+    # Host doesn't pass community_id — it's derived from their profile so the
+    # event is actually scoped to (and visible within) their community.
+    ev = (
+        await host.post(
+            "/api/events", json=event_payload(title="Block party", visibility="community")
+        )
+    ).json()
+    found = (await member.get(NEARBY)).json()
+    assert any(e["id"] == ev["id"] for e in found)
+
+
+async def test_community_event_requires_membership(make_user):
+    loner = await make_user("loner@example.com", "Loner")
+    r = await loner.post("/api/events", json=event_payload(visibility="community"))
+    assert r.status_code == 422
+
+
+async def test_new_account_avatar_is_a_real_emoji(make_user):
+    user = await make_user("fresh@example.com", "Fresh")
+    profile = (await user.get("/api/profiles/me")).json()
+    assert profile["avatar_key"] == "🙂"  # not the literal string "default"
+
+
 async def test_event_tag_flows_to_summary_detail_and_map(make_user, interest_id):
     dylan = await make_user("dylan@example.com", "Dylan")
     created = (
@@ -216,6 +270,64 @@ async def test_event_rejects_unknown_tag(make_user):
         json=event_payload(tag_id="00000000-0000-0000-0000-000000000000"),
     )
     assert r.status_code == 422
+
+
+async def test_host_can_edit_title_and_tag(make_user, interest_id):
+    host = await make_user("host@example.com", "Host")
+    ev = (await host.post("/api/events", json=event_payload(title="Old title"))).json()
+
+    r = await host.patch(
+        f"/api/events/{ev['id']}", json={"title": "New title", "tag_id": interest_id}
+    )
+    assert r.status_code == 200
+    detail = (await host.get(f"/api/events/{ev['id']}")).json()
+    assert detail["title"] == "New title"
+    assert detail["tag_id"] == interest_id
+    assert detail["tag_slug"] == "gardening"
+
+
+async def test_host_can_clear_tag(make_user, interest_id):
+    host = await make_user("host@example.com", "Host")
+    ev = (await host.post("/api/events", json=event_payload(tag_id=interest_id))).json()
+    assert ev["tag_slug"] == "gardening"
+
+    await host.patch(f"/api/events/{ev['id']}", json={"tag_id": None})
+    detail = (await host.get(f"/api/events/{ev['id']}")).json()
+    assert detail["tag_id"] is None
+    assert detail["tag_slug"] is None
+
+
+async def test_non_host_cannot_edit(make_user):
+    host = await make_user("host@example.com", "Host")
+    intruder = await make_user("x@example.com", "X")
+    ev = (await host.post("/api/events", json=event_payload())).json()
+    r = await intruder.patch(f"/api/events/{ev['id']}", json={"title": "Hacked"})
+    assert r.status_code == 403
+
+
+async def test_edit_rejects_end_before_start(make_user):
+    host = await make_user("host@example.com", "Host")
+    ev = (
+        await host.post("/api/events", json=event_payload(starts_at="2027-08-01T15:00:00Z"))
+    ).json()
+    r = await host.patch(f"/api/events/{ev['id']}", json={"ends_at": "2027-08-01T14:00:00Z"})
+    assert r.status_code == 422
+
+
+async def test_edit_to_community_visibility_scopes_and_shows(make_user, community_id):
+    host = await make_user("host@example.com", "Host")
+    member = await make_user("member@example.com", "Member")
+    for c in (host, member):
+        await c.patch("/api/profiles/me", json={"community_id": community_id})
+    ev = (
+        await host.post("/api/events", json=event_payload(title="Flip me", visibility="public"))
+    ).json()
+
+    # Flipping to community must derive community_id, or it would go invisible.
+    r = await host.patch(f"/api/events/{ev['id']}", json={"visibility": "community"})
+    assert r.status_code == 200
+    found = (await member.get(NEARBY)).json()
+    assert any(e["id"] == ev["id"] for e in found)
 
 
 async def test_my_events_lists_only_my_creations(make_user):

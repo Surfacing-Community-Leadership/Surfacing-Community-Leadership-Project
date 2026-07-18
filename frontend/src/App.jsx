@@ -8,11 +8,13 @@ import Landing from "./pages/Landing.jsx";
 import MapHome from "./pages/MapHome.jsx";
 import EventDetail from "./pages/EventDetail.jsx";
 import CreateEvent from "./pages/CreateEvent.jsx";
+import EditEvent from "./pages/EditEvent.jsx";
 import MyEvents from "./pages/MyEvents.jsx";
 import Profile from "./pages/Profile.jsx";
 import PublicProfile from "./pages/PublicProfile.jsx";
 import Connections from "./pages/Connections.jsx";
 import Blocks from "./pages/Blocks.jsx";
+import Notifications from "./pages/Notifications.jsx";
 
 export default function App() {
   return (
@@ -35,10 +37,12 @@ export default function App() {
         <Route path="/events/new" element={<CreateEvent />} />
         <Route path="/my-events" element={<MyEvents />} />
         <Route path="/events/:id" element={<EventDetail />} />
+        <Route path="/events/:id/edit" element={<EditEvent />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/profile/:userId" element={<PublicProfile />} />
         <Route path="/connections" element={<Connections />} />
         <Route path="/blocks" element={<Blocks />} />
+        <Route path="/notifications" element={<Notifications />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

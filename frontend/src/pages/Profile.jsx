@@ -9,7 +9,7 @@ import CommunityPicker from "../components/CommunityPicker.jsx";
 // everything the first-run "quick setup" (Onboarding) collects — community,
 // interests, and preferences — so there's no separate page to visit later.
 export default function Profile() {
-  const { data, error, loading, reload } = useApi(async () => {
+  const { data, error, loading } = useApi(async () => {
     const [profile, interests, myInterests] = await Promise.all([
       api.get("/api/profiles/me"),
       api.get("/api/interests"),
@@ -20,6 +20,9 @@ export default function Profile() {
 
   const [form, setForm] = useState(null);
   const [selectedInterests, setSelectedInterests] = useState(new Set());
+  // Avatar lives in its own state (not `form`) so uploading it can update the
+  // preview without re-seeding — and discarding — the user's unsaved edits.
+  const [avatarKey, setAvatarKey] = useState(null);
   const [status, setStatus] = useState(null);
   const [saving, setSaving] = useState(false);
 
@@ -35,6 +38,7 @@ export default function Profile() {
       open_to_help: p.open_to_help,
     });
     setSelectedInterests(new Set(data.myInterests.interest_ids));
+    setAvatarKey(p.avatar_key);
   }, [data]);
 
   if (loading || !form) return <div className="centered muted">Loading…</div>;
@@ -60,9 +64,11 @@ export default function Profile() {
     const formData = new FormData();
     formData.append("file", file);
     try {
-      await api.upload("/api/profiles/me/avatar", formData);
+      // Update only the preview from the response — don't reload the whole
+      // profile, which would reseed the form and lose unsaved edits.
+      const updated = await api.upload("/api/profiles/me/avatar", formData);
+      setAvatarKey(updated.avatar_key);
       setStatus("Avatar updated.");
-      await reload();
     } catch (err) {
       setStatus(err.message);
     }
@@ -103,14 +109,10 @@ export default function Profile() {
         </Field>
         <Field label="Avatar" hint="JPEG, PNG or WebP, up to 2 MB.">
           <div className="row-actions">
-            {avatarUrl(data.profile.avatar_key) ? (
-              <img
-                className="avatar-img"
-                src={avatarUrl(data.profile.avatar_key)}
-                alt="Your avatar"
-              />
+            {avatarUrl(avatarKey) ? (
+              <img className="avatar-img" src={avatarUrl(avatarKey)} alt="Your avatar" />
             ) : (
-              <span className="avatar-lg">🙂</span>
+              <span className="avatar-lg">{avatarKey || "🙂"}</span>
             )}
             <input
               type="file"

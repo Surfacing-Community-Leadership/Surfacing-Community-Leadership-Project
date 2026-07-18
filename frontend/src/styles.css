@@ -85,6 +85,50 @@ a {
   gap: 1rem;
 }
 
+/* ---- Notification bell ---- */
+.notif-bell {
+  position: relative;
+  text-decoration: none;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+.notif-badge {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+.notif-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0.5rem;
+  border-bottom: 1px solid var(--line);
+}
+.notif-item a {
+  text-decoration: none;
+  color: var(--ink);
+}
+.notif-unread {
+  background: #eef5f0;
+  border-left: 3px solid var(--accent);
+  padding-left: 0.5rem;
+}
+.notif-time {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+}
+
 .page {
   flex: 1;
   padding: 1.25rem;
@@ -265,6 +309,17 @@ button.danger {
   margin-bottom: 0.75rem;
 }
 .sidebar-header select {
+  width: auto;
+}
+.map-filters {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+.map-filters select {
+  flex: 1;
+  min-width: 130px;
   width: auto;
 }
 

@@ -4,12 +4,14 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import and_, func, or_, select
 
+from app.core.notifications import notify
 from app.models import Connection, EventParticipant, Profile, User
 from app.routers.deps import (
     ACTIVE_PARTICIPANT_STATUSES,
     CONFIRMED_PARTICIPANT_STATUSES,
     DB,
     CurrentUser,
+    blocked_counterparts,
     blocked_either_way,
     get_event_or_404,
     get_participation,
@@ -42,6 +44,9 @@ async def list_participants(
             select(EventParticipant, Profile)
             .join(Profile, Profile.user_id == EventParticipant.user_id)
             .where(EventParticipant.event_id == event.id)
+            # Hide anyone you have a block with (either direction) — e.g. in an
+            # event you both joined that a third person hosts.
+            .where(EventParticipant.user_id.not_in(blocked_counterparts(user.id)))
             .order_by(EventParticipant.created_at)
             .limit(limit)
             .offset(offset)
@@ -92,6 +97,12 @@ async def set_rsvp(event_id: uuid.UUID, payload: RsvpPayload, db: DB, user: Curr
         db.add(participation)
     else:
         participation.status = payload.status
+    # Let the host know when someone's coming (not on a "declined").
+    if event.host_id is not None and payload.status in ("going", "maybe"):
+        await notify(
+            db, user_id=event.host_id, type="event_rsvp",
+            actor_id=user.id, event_id=event.id,
+        )
     await db.commit()
     return RsvpRead(event_id=event.id, user_id=user.id, status=payload.status)
 
@@ -156,6 +167,10 @@ async def invite_user(event_id: uuid.UUID, payload: InvitePayload, db: DB, user:
         status="invited",
     )
     db.add(invite)
+    await notify(
+        db, user_id=payload.user_id, type="event_invite",
+        actor_id=user.id, event_id=event.id,
+    )
     await db.commit()
     return InviteRead(
         event_id=event.id, user_id=payload.user_id, status="invited", inviter_id=user.id

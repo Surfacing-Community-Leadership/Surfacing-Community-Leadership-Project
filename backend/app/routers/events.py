@@ -6,8 +6,10 @@ from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import and_, func, or_, select
 
 from app.core.geo import to_latlng, wkt_point
-from app.models import Community, Event, EventParticipant, Interest
+from app.core.notifications import notify
+from app.models import Community, Event, EventParticipant, Interest, user_interests
 from app.routers.deps import (
+    ACTIVE_PARTICIPANT_STATUSES,
     ALLOWED_STATUS_TRANSITIONS,
     CONFIRMED_PARTICIPANT_STATUSES,
     DB,
@@ -81,6 +83,19 @@ async def _validate_community(db, community_id) -> None:
         raise HTTPException(status_code=422, detail="Unknown community")
 
 
+async def _require_own_community_id(db, user):
+    """The host's community, for scoping a 'community only' event. Without it
+    the event's community_id would be NULL and the visibility clause could
+    never match, so the event would be invisible to the very people it targets."""
+    community_id = await get_my_community_id(db, user.id)
+    if community_id is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Join a community first to post a community-only event",
+        )
+    return community_id
+
+
 @router.get("", response_model=list[EventSummary])
 async def discover_events(
     db: DB,
@@ -90,13 +105,16 @@ async def discover_events(
     radius_m: Annotated[int, Query(gt=0, le=100_000)] = 5000,
     kind: EventKind | None = None,
     community_id: uuid.UUID | None = None,
+    tag_id: uuid.UUID | None = None,
+    matching_interests: bool = False,
     from_: Annotated[datetime | None, Query(alias="from")] = None,
     to: Annotated[datetime | None, Query(alias="to")] = None,
     limit: Annotated[int, Query(gt=0, le=200)] = 200,
     offset: Annotated[int, Query(ge=0)] = 0,
 ):
     """The map query: visible events within radius_m of (lat, lng),
-    nearest first. Defaults to upcoming events only."""
+    nearest first. Defaults to upcoming events only. Optional tag_id filters to
+    one category; matching_interests limits to categories the user follows."""
     my_community_id = await get_my_community_id(db, user.id)
     point = func.ST_GeogFromText(wkt_point(lat, lng))
     distance = func.ST_Distance(Event.location, point).label("distance_m")
@@ -122,6 +140,14 @@ async def discover_events(
         stmt = stmt.where(Event.kind == kind)
     if community_id is not None:
         stmt = stmt.where(Event.community_id == community_id)
+    if tag_id is not None:
+        stmt = stmt.where(Event.tag_id == tag_id)
+    if matching_interests:
+        # Only events tagged with a category this user follows.
+        my_interests = select(user_interests.c.interest_id).where(
+            user_interests.c.user_id == user.id
+        )
+        stmt = stmt.where(Event.tag_id.in_(my_interests))
 
     now = datetime.now(timezone.utc)
     if from_ is not None:
@@ -143,10 +169,15 @@ async def create_event(payload: EventCreate, db: DB, user: CurrentUser):
     await _validate_community(db, payload.community_id)
     tag = await _resolve_tag(db, payload.tag_id)
 
+    # A "community only" event is scoped to the host's own community.
+    community_id = payload.community_id
+    if payload.visibility == "community":
+        community_id = await _require_own_community_id(db, user)
+
     event = Event(
         kind=payload.kind,
         host_id=user.id,
-        community_id=payload.community_id,
+        community_id=community_id,
         tag=tag,  # assigning the object also sets tag_id and keeps it loaded
         title=payload.title,
         description=payload.description,
@@ -207,6 +238,7 @@ async def read_event(event_id: uuid.UUID, db: DB, user: CurrentUser):
         source=event.source,
         external_url=event.external_url,
         participant_count=participant_count,
+        tag_id=event.tag_id,
         tag_slug=event.tag.slug if event.tag else None,
         tag_name=event.tag.name if event.tag else None,
     )
@@ -219,19 +251,61 @@ async def update_event(event_id: uuid.UUID, payload: EventUpdate, db: DB, user: 
         raise HTTPException(status_code=403, detail="Only the host may edit this event")
 
     updates = payload.model_dump(exclude_unset=True)
+
+    # The tag is a relationship, not a plain column: resolve and assign the
+    # object so event.tag stays consistent for the response. Popped so the
+    # generic setattr loop below doesn't also try to set a "tag_id" attribute.
+    if "tag_id" in updates:
+        event.tag = await _resolve_tag(db, updates.pop("tag_id"))
+
     if "location" in updates and updates["location"] is not None:
         loc = payload.location
         updates["location"] = wkt_point(loc.lat, loc.lng)
+
+    is_cancelling = updates.get("status") == "cancelled" and event.status != "cancelled"
     if "status" in updates and updates["status"] != event.status:
         if updates["status"] not in ALLOWED_STATUS_TRANSITIONS[event.status]:
             raise HTTPException(
                 status_code=409,
                 detail=f"Cannot change a {event.status} event to {updates['status']}",
             )
+
+    # ends_at must still come after starts_at once the changes are applied
+    # (validate against the merged values, since either may be updated alone).
+    new_starts = updates.get("starts_at", event.starts_at)
+    new_ends = updates.get("ends_at", event.ends_at)
+    if new_ends is not None and new_ends <= new_starts:
+        raise HTTPException(status_code=422, detail="End time must be after the start time")
+
+    # Switching to community visibility scopes the event to the host's own
+    # community (mirrors create) so it doesn't become invisible.
+    new_visibility = updates.get("visibility", event.visibility)
+    if new_visibility == "community" and event.community_id is None:
+        event.community_id = await _require_own_community_id(db, user)
+
     for field, value in updates.items():
         setattr(event, field, value)
+
+    # Tell everyone who RSVP'd that the event is off.
+    if is_cancelling:
+        attendee_ids = (
+            await db.scalars(
+                select(EventParticipant.user_id).where(
+                    EventParticipant.event_id == event.id,
+                    EventParticipant.status.in_(ACTIVE_PARTICIPANT_STATUSES),
+                )
+            )
+        ).all()
+        for attendee_id in attendee_ids:
+            await notify(
+                db, user_id=attendee_id, type="event_cancelled",
+                actor_id=user.id, event_id=event.id,
+            )
+
     await db.commit()
-    await db.refresh(event)
+    # Reload location as a geometry if it was just set from a WKT string;
+    # leaves the assigned tag relationship intact.
+    await db.refresh(event, attribute_names=["location"])
     return _summary(event)
 
 

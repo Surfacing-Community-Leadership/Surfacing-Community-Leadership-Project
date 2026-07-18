@@ -1,16 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client.js";
+import { useApi } from "../hooks/useApi.js";
 import MapView from "../components/MapView.jsx";
 import { useGeolocation } from "../hooks/useGeolocation.js";
+import { tagIcon } from "../lib/tagIcons.js";
 
 export default function MapHome() {
   const center = useGeolocation(); // [lat, lng]; null until located
   const [events, setEvents] = useState([]);
   const [kind, setKind] = useState(""); // "", "gathering", "help_request"
+  // "" = all categories, "mine" = matching my interests, or an interest id.
+  const [category, setCategory] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const mapRef = useRef(null);
+  const { data: interests } = useApi(() => api.get("/api/interests"));
 
   const fetchEvents = useCallback(
     async (lat, lng, radiusM) => {
@@ -23,6 +28,8 @@ export default function MapHome() {
           radius_m: Math.round(radiusM),
         });
         if (kind) params.set("kind", kind);
+        if (category === "mine") params.set("matching_interests", "true");
+        else if (category) params.set("tag_id", category);
         setEvents(await api.get(`/api/events?${params}`));
       } catch (err) {
         setError(err.message);
@@ -30,7 +37,7 @@ export default function MapHome() {
         setLoading(false);
       }
     },
-    [kind],
+    [kind, category],
   );
 
   // Radius = distance from the map center to a corner of the current view,
@@ -43,13 +50,13 @@ export default function MapHome() {
     fetchEvents(c.lat, c.lng, Math.min(radiusM, 100000));
   }, [fetchEvents]);
 
-  // Initial load once located, and again whenever the kind filter changes.
+  // Initial load once located, and again whenever a filter changes.
   useEffect(() => {
     if (!center) return;
     if (mapRef.current) searchVisibleArea();
     else fetchEvents(center[0], center[1], 5000);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [center, kind]);
+  }, [center, kind, category]);
 
   if (!center) {
     return <div className="centered muted">Finding your neighborhood…</div>;
@@ -73,17 +80,30 @@ export default function MapHome() {
       <aside className="map-sidebar">
         <div className="sidebar-header">
           <h2>Nearby</h2>
+        </div>
+        <div className="map-filters">
           <select value={kind} onChange={(e) => setKind(e.target.value)}>
-            <option value="">All</option>
+            <option value="">All types</option>
             <option value="gathering">Gatherings</option>
             <option value="help_request">Help requests</option>
+          </select>
+          <select value={category} onChange={(e) => setCategory(e.target.value)}>
+            <option value="mine">✨ For you</option>
+            <option value="">All categories</option>
+            {interests?.map((i) => (
+              <option key={i.id} value={i.id}>
+                {tagIcon(i.slug)} {i.name}
+              </option>
+            ))}
           </select>
         </div>
 
         {error && <div className="alert">{error}</div>}
         {!loading && events.length === 0 && (
           <p className="muted">
-            Nothing here yet. Pan the map and search again, or{" "}
+            {category === "mine"
+              ? "Nothing here matches your interests yet. Try widening to All categories, or "
+              : "Nothing here yet. Pan the map and search again, or "}
             <Link to="/events/new">create something</Link>.
           </p>
         )}
@@ -97,6 +117,7 @@ export default function MapHome() {
                   <strong>{ev.title}</strong>
                   <span className="muted">
                     {ev.kind === "help_request" ? "Help request" : "Gathering"}
+                    {ev.tag_name && ` · ${ev.tag_name}`}
                     {ev.distance_m != null && ` · ${formatDistance(ev.distance_m)}`}
                   </span>
                 </span>
