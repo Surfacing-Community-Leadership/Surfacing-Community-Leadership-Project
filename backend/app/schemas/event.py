@@ -22,7 +22,7 @@ class EventCreate(BaseModel):
     visibility: EventVisibility = "public"
     capacity: int | None = Field(None, gt=0)
     community_id: uuid.UUID | None = None
-    interest_ids: list[uuid.UUID] = []
+    tag_id: uuid.UUID | None = None
 
     @model_validator(mode="after")
     def ends_after_start(self):
@@ -53,6 +53,11 @@ class EventSummary(BaseModel):
     visibility: str
     status: str
     distance_m: float | None = None
+    # The viewer's own RSVP ("going"/"maybe"), set only by the "going to" list.
+    my_rsvp: str | None = None
+    # The event's single category, used to pick the map pin's icon.
+    tag_slug: str | None = None
+    tag_name: str | None = None
 
 
 class EventDetail(BaseModel):
@@ -72,3 +77,5 @@ class EventDetail(BaseModel):
     source: str
     external_url: str | None
     participant_count: int
+    tag_slug: str | None = None
+    tag_name: str | None = None

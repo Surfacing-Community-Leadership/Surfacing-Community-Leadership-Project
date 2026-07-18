@@ -15,13 +15,13 @@ export default function Layout() {
   return (
     <div className="app-shell">
       <header className="topnav">
-        <NavLink to="/map" className="brand">
+        <NavLink to="/" className="brand">
           Ours
         </NavLink>
         <nav>
           <NavLink to="/map">Map</NavLink>
           <NavLink to="/events/new">Create</NavLink>
-          <NavLink to="/my-events">My events</NavLink>
+          <NavLink to="/my-events">Events</NavLink>
           <NavLink to="/connections">Connections</NavLink>
           <NavLink to="/profile">Profile</NavLink>
         </nav>

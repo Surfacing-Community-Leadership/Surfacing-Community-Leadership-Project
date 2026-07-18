@@ -1,12 +1,12 @@
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import and_, func, or_, select
 
 from app.core.geo import to_latlng, wkt_point
-from app.models import Community, Event, EventParticipant, Interest, event_interests
+from app.models import Community, Event, EventParticipant, Interest
 from app.routers.deps import (
     ALLOWED_STATUS_TRANSITIONS,
     CONFIRMED_PARTICIPANT_STATUSES,
@@ -16,15 +16,12 @@ from app.routers.deps import (
     get_event_or_404,
     get_my_community_id,
     get_participation,
+    not_ended_clause,
     require_event_view,
 )
 from app.schemas.event import EventCreate, EventDetail, EventKind, EventSummary, EventUpdate
 
 router = APIRouter(prefix="/api/events", tags=["events"])
-
-# An event with no explicit end time is assumed to run this long, so one
-# created to start "right now" stays on the map instead of vanishing at once.
-DEFAULT_VISIBLE_HOURS = 3
 
 
 def _visibility_clause(user_id: uuid.UUID, my_community_id: uuid.UUID | None):
@@ -62,19 +59,26 @@ def _summary(event: Event, distance_m: float | None = None) -> EventSummary:
         visibility=event.visibility,
         status=event.status,
         distance_m=round(distance_m, 1) if distance_m is not None else None,
+        tag_slug=event.tag.slug if event.tag else None,
+        tag_name=event.tag.name if event.tag else None,
     )
 
 
-async def _validate_refs(db, community_id, interest_ids) -> None:
-    if community_id is not None:
-        if await db.get(Community, community_id) is None:
-            raise HTTPException(status_code=422, detail="Unknown community")
-    if interest_ids:
-        found = await db.scalar(
-            select(func.count()).select_from(Interest).where(Interest.id.in_(interest_ids))
-        )
-        if found != len(interest_ids):
-            raise HTTPException(status_code=422, detail="Unknown interest id")
+async def _resolve_tag(db, tag_id) -> Interest | None:
+    """Validate the tag id and return the Interest so it can be assigned to the
+    event's relationship directly — that keeps event.tag populated in memory,
+    avoiding an async lazy-load after commit."""
+    if tag_id is None:
+        return None
+    tag = await db.get(Interest, tag_id)
+    if tag is None:
+        raise HTTPException(status_code=422, detail="Unknown tag")
+    return tag
+
+
+async def _validate_community(db, community_id) -> None:
+    if community_id is not None and await db.get(Community, community_id) is None:
+        raise HTTPException(status_code=422, detail="Unknown community")
 
 
 @router.get("", response_model=list[EventSummary])
@@ -124,17 +128,9 @@ async def discover_events(
         # Explicit range query: filter strictly by start time.
         stmt = stmt.where(Event.starts_at >= from_)
     else:
-        # Default map behavior: show events that haven't ENDED yet — ongoing
-        # and upcoming — so an event starting "now" doesn't disappear the
-        # moment it begins. With an end time, it's visible until it ends;
-        # without one, until DEFAULT_VISIBLE_HOURS after it starts.
-        grace_cutoff = now - timedelta(hours=DEFAULT_VISIBLE_HOURS)
-        stmt = stmt.where(
-            or_(
-                and_(Event.ends_at.isnot(None), Event.ends_at >= now),
-                and_(Event.ends_at.is_(None), Event.starts_at >= grace_cutoff),
-            )
-        )
+        # Default map behavior: show events that haven't ended yet, so one
+        # starting "now" doesn't disappear the moment it begins.
+        stmt = stmt.where(not_ended_clause(now))
     if to is not None:
         stmt = stmt.where(Event.starts_at <= to)
 
@@ -144,12 +140,14 @@ async def discover_events(
 
 @router.post("", response_model=EventSummary, status_code=201)
 async def create_event(payload: EventCreate, db: DB, user: CurrentUser):
-    await _validate_refs(db, payload.community_id, payload.interest_ids)
+    await _validate_community(db, payload.community_id)
+    tag = await _resolve_tag(db, payload.tag_id)
 
     event = Event(
         kind=payload.kind,
         host_id=user.id,
         community_id=payload.community_id,
+        tag=tag,  # assigning the object also sets tag_id and keeps it loaded
         title=payload.title,
         description=payload.description,
         location=wkt_point(payload.location.lat, payload.location.lng),
@@ -160,14 +158,11 @@ async def create_event(payload: EventCreate, db: DB, user: CurrentUser):
         capacity=payload.capacity,
     )
     db.add(event)
-    await db.flush()  # assigns event.id without ending the transaction
-    if payload.interest_ids:
-        await db.execute(
-            event_interests.insert(),
-            [{"event_id": event.id, "interest_id": iid} for iid in set(payload.interest_ids)],
-        )
     await db.commit()
-    await db.refresh(event)  # load server defaults (status, timestamps)
+    # Reload the server-default status and the location as a proper geometry
+    # (we assigned it as a WKT string). Naming attributes avoids re-expiring —
+    # and async-lazy-loading — the tag relationship we assigned above.
+    await db.refresh(event, attribute_names=["status", "location"])
     return _summary(event)
 
 
@@ -212,6 +207,8 @@ async def read_event(event_id: uuid.UUID, db: DB, user: CurrentUser):
         source=event.source,
         external_url=event.external_url,
         participant_count=participant_count,
+        tag_slug=event.tag.slug if event.tag else None,
+        tag_name=event.tag.name if event.tag else None,
     )
 
 

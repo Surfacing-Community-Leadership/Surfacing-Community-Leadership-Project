@@ -3,33 +3,38 @@ import { Link } from "react-router-dom";
 import { api, avatarUrl } from "../api/client.js";
 import { useApi } from "../hooks/useApi.js";
 import Field from "../components/Field.jsx";
+import CommunityPicker from "../components/CommunityPicker.jsx";
 
-// The signed-in user's own editable profile.
+// The signed-in user's own editable profile. This is the one place to manage
+// everything the first-run "quick setup" (Onboarding) collects — community,
+// interests, and preferences — so there's no separate page to visit later.
 export default function Profile() {
   const { data, error, loading, reload } = useApi(async () => {
-    const [profile, communities] = await Promise.all([
+    const [profile, interests, myInterests] = await Promise.all([
       api.get("/api/profiles/me"),
-      api.get("/api/communities"),
+      api.get("/api/interests"),
+      api.get("/api/profiles/me/interests"),
     ]);
-    return { profile, communities };
+    return { profile, interests, myInterests };
   });
 
   const [form, setForm] = useState(null);
+  const [selectedInterests, setSelectedInterests] = useState(new Set());
   const [status, setStatus] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  // Seed the form once the profile arrives.
+  // Seed the form once the profile and interests arrive.
   useEffect(() => {
-    if (data?.profile) {
-      const p = data.profile;
-      setForm({
-        display_name: p.display_name,
-        bio: p.bio || "",
-        community_id: p.community_id || "",
-        show_attending: p.show_attending,
-        open_to_help: p.open_to_help,
-      });
-    }
+    if (!data?.profile) return;
+    const p = data.profile;
+    setForm({
+      display_name: p.display_name,
+      bio: p.bio || "",
+      community_id: p.community_id || "",
+      show_attending: p.show_attending,
+      open_to_help: p.open_to_help,
+    });
+    setSelectedInterests(new Set(data.myInterests.interest_ids));
   }, [data]);
 
   if (loading || !form) return <div className="centered muted">Loading…</div>;
@@ -39,6 +44,14 @@ export default function Profile() {
     const value = e.target.type === "checkbox" ? e.target.checked : e.target.value;
     setForm((f) => ({ ...f, [key]: value }));
   };
+
+  function toggleInterest(id) {
+    setSelectedInterests((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
 
   async function onAvatarPick(e) {
     const file = e.target.files?.[0];
@@ -60,9 +73,14 @@ export default function Profile() {
     setSaving(true);
     setStatus(null);
     try {
+      // Profile fields and interests live behind two endpoints (PATCH the
+      // profile, PUT the full interest set), same as first-run onboarding.
       await api.patch("/api/profiles/me", {
         ...form,
         community_id: form.community_id || null,
+      });
+      await api.put("/api/profiles/me/interests", {
+        interest_ids: [...selectedInterests],
       });
       setStatus("Saved.");
     } catch (err) {
@@ -101,16 +119,32 @@ export default function Profile() {
             />
           </div>
         </Field>
-        <Field label="Community">
-          <select value={form.community_id} onChange={set("community_id")}>
-            <option value="">None</option>
-            {data.communities.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
+        {/* Community and Interests use div.field (not <Field>, which wraps a
+            <label>) — nesting the picker/chip buttons inside a label is
+            invalid and forwards stray clicks. */}
+        <div className="field">
+          <span className="field-label">Community</span>
+          <CommunityPicker
+            value={form.community_id}
+            onChange={(id) => setForm((f) => ({ ...f, community_id: id }))}
+          />
+        </div>
+        <div className="field">
+          <span className="field-label">Interests</span>
+          <span className="field-hint">Pick any that fit — we'll surface matching events.</span>
+          <div className="chip-grid">
+            {data.interests.map((interest) => (
+              <button
+                type="button"
+                key={interest.id}
+                className={selectedInterests.has(interest.id) ? "chip chip-on" : "chip"}
+                onClick={() => toggleInterest(interest.id)}
+              >
+                {interest.name}
+              </button>
             ))}
-          </select>
-        </Field>
+          </div>
+        </div>
         <label className="checkbox">
           <input type="checkbox" checked={form.open_to_help} onChange={set("open_to_help")} />
           Open to helping neighbors
@@ -125,7 +159,6 @@ export default function Profile() {
       </form>
       <p className="muted">
         <Link to="/my-events">Your events</Link> ·{" "}
-        Want to update your interests? <Link to="/onboarding">Redo the quick setup</Link>. ·{" "}
         <Link to="/blocks">Manage blocked users</Link>
       </p>
     </div>

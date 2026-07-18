@@ -180,6 +180,44 @@ async def test_ongoing_event_with_end_time_shows_until_it_ends(make_user):
     assert any(e["title"] == "Long picnic" for e in found)
 
 
+async def test_event_tag_flows_to_summary_detail_and_map(make_user, interest_id):
+    dylan = await make_user("dylan@example.com", "Dylan")
+    created = (
+        await dylan.post(
+            "/api/events", json=event_payload(title="Garden day", tag_id=interest_id)
+        )
+    ).json()
+    # Create response (an EventSummary) carries the tag.
+    assert created["tag_slug"] == "gardening"
+    assert created["tag_name"] == "Gardening"
+
+    # Detail view carries it too.
+    detail = (await dylan.get(f"/api/events/{created['id']}")).json()
+    assert detail["tag_slug"] == "gardening"
+
+    # And so does the map/discovery query (exercises the joined tag load).
+    found = (await dylan.get(NEARBY)).json()
+    mine = next(e for e in found if e["id"] == created["id"])
+    assert mine["tag_slug"] == "gardening"
+    assert mine["tag_name"] == "Gardening"
+
+
+async def test_event_without_tag_has_null_tag(make_user):
+    dylan = await make_user("dylan@example.com", "Dylan")
+    ev = (await dylan.post("/api/events", json=event_payload())).json()
+    assert ev["tag_slug"] is None
+    assert ev["tag_name"] is None
+
+
+async def test_event_rejects_unknown_tag(make_user):
+    dylan = await make_user("dylan@example.com", "Dylan")
+    r = await dylan.post(
+        "/api/events",
+        json=event_payload(tag_id="00000000-0000-0000-0000-000000000000"),
+    )
+    assert r.status_code == 422
+
+
 async def test_my_events_lists_only_my_creations(make_user):
     dylan = await make_user("dylan@example.com", "Dylan")
     eleanor = await make_user("eleanor@example.com", "Eleanor")
@@ -191,12 +229,42 @@ async def test_my_events_lists_only_my_creations(make_user):
     assert {e["title"] for e in mine} == {"Mine A", "Mine B"}
 
 
-async def test_my_events_includes_cancelled(make_user):
-    # Unlike the map, this list shows events in any status.
+async def test_my_events_excludes_cancelled(make_user):
+    # Cancelled events drop off the personal Events page.
     dylan = await make_user("dylan@example.com", "Dylan")
     ev = (await dylan.post("/api/events", json=event_payload(title="Called off"))).json()
+    await dylan.post("/api/events", json=event_payload(title="Still on"))
     await dylan.patch(f"/api/events/{ev['id']}", json={"status": "cancelled"})
 
     mine = (await dylan.get("/api/users/me/events")).json()
-    assert [e["title"] for e in mine] == ["Called off"]
-    assert mine[0]["status"] == "cancelled"
+    assert [e["title"] for e in mine] == ["Still on"]
+
+
+async def test_attending_lists_going_and_maybe_with_rsvp(make_user):
+    host = await make_user("host@example.com", "Host")
+    goer = await make_user("goer@example.com", "Goer")
+    going = (await host.post("/api/events", json=event_payload(title="Going one"))).json()
+    maybe = (await host.post("/api/events", json=event_payload(title="Maybe one"))).json()
+    declined = (await host.post("/api/events", json=event_payload(title="Declined one"))).json()
+    await goer.put(f"/api/events/{going['id']}/rsvp", json={"status": "going"})
+    await goer.put(f"/api/events/{maybe['id']}/rsvp", json={"status": "maybe"})
+    await goer.put(f"/api/events/{declined['id']}/rsvp", json={"status": "declined"})
+
+    attending = (await goer.get("/api/users/me/attending")).json()
+    # going + maybe show (with their RSVP labelled), declined does not.
+    assert {e["title"]: e["my_rsvp"] for e in attending} == {
+        "Going one": "going",
+        "Maybe one": "maybe",
+    }
+    # The host isn't attending their own events.
+    assert (await host.get("/api/users/me/attending")).json() == []
+
+
+async def test_attending_excludes_cancelled(make_user):
+    host = await make_user("host@example.com", "Host")
+    goer = await make_user("goer@example.com", "Goer")
+    ev = (await host.post("/api/events", json=event_payload(title="Off now"))).json()
+    await goer.put(f"/api/events/{ev['id']}/rsvp", json={"status": "going"})
+    await host.patch(f"/api/events/{ev['id']}", json={"status": "cancelled"})
+
+    assert (await goer.get("/api/users/me/attending")).json() == []

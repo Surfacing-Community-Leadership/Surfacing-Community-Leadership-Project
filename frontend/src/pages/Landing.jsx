@@ -1,22 +1,28 @@
-import { Navigate, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext.jsx";
 
-// The public front door. Logged-in users skip it and go straight to the map;
-// everyone else sees what Ours is and how to get in.
+// The public front door. It's reachable by anyone, including logged-in users
+// (they get here by clicking the logo), so the calls-to-action adapt: signed-in
+// visitors are offered their map, everyone else is offered a way in.
 export default function Landing() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
 
   if (loading) return <div className="centered muted">Loading…</div>;
-  if (user) return <Navigate to="/map" replace />;
 
   return (
     <div className="landing">
       <header className="landing-header">
         <span className="brand">Ours</span>
-        <button className="secondary" onClick={() => navigate("/login")}>
-          Log in
-        </button>
+        {user ? (
+          <button className="secondary" onClick={() => navigate("/map")}>
+            Open your map
+          </button>
+        ) : (
+          <button className="secondary" onClick={() => navigate("/login")}>
+            Log in
+          </button>
+        )}
       </header>
 
       <section className="landing-hero">
@@ -27,10 +33,16 @@ export default function Landing() {
           nudge to get into a room together.
         </p>
         <div className="row-actions landing-cta">
-          <button onClick={() => navigate("/register")}>Get started</button>
-          <button className="secondary" onClick={() => navigate("/login")}>
-            I already have an account
-          </button>
+          {user ? (
+            <button onClick={() => navigate("/map")}>Open your map</button>
+          ) : (
+            <>
+              <button onClick={() => navigate("/register")}>Get started</button>
+              <button className="secondary" onClick={() => navigate("/login")}>
+                I already have an account
+              </button>
+            </>
+          )}
         </div>
       </section>
 

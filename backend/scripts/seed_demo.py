@@ -41,7 +41,6 @@ from app.models import (
     Interest,
     Profile,
     User,
-    event_interests,
     user_interests,
 )
 
@@ -219,10 +218,13 @@ async def main() -> None:
                 "starter interests are seeded."
             )
 
-        # 2. The community everyone belongs to.
+        # 2. The community everyone belongs to. osm_ref matches the real
+        # OpenStreetMap node so that a user picking "Sunset Park" from the
+        # live neighborhood list reuses this row instead of duplicating it.
         community = Community(
             name="Sunset Park",
             slug="sunset-park",
+            osm_ref="node/3343148003",
             center=wkt_point(*CENTER),
         )
         session.add(community)
@@ -272,10 +274,14 @@ async def main() -> None:
             # ~15% community-only, ~8% private, rest public.
             roll = random.random()
             visibility = "community" if roll < 0.15 else "private" if roll < 0.23 else "public"
+            # A single category tag drives the map pin's icon — use the first
+            # of each event's listed slugs.
+            tag_id = interests[slugs[0]].id if slugs else None
             event = Event(
                 kind=kind,
                 host_id=host.id,
                 community_id=community.id,
+                tag_id=tag_id,
                 title=title,
                 description=desc,
                 location=wkt_point(lat, lng),
@@ -287,11 +293,6 @@ async def main() -> None:
             )
             session.add(event)
             await session.flush()
-            if slugs:
-                await session.execute(
-                    event_interests.insert(),
-                    [{"event_id": event.id, "interest_id": interests[s].id} for s in slugs],
-                )
             created.append((event, host, capacity))
 
         # 5. RSVPs, so events show non-zero attendance. Never the host,
