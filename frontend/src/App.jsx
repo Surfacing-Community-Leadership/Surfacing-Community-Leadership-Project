@@ -14,6 +14,7 @@ import Profile from "./pages/Profile.jsx";
 import PublicProfile from "./pages/PublicProfile.jsx";
 import Connections from "./pages/Connections.jsx";
 import Blocks from "./pages/Blocks.jsx";
+import Notifications from "./pages/Notifications.jsx";
 
 export default function App() {
   return (
@@ -41,6 +42,7 @@ export default function App() {
         <Route path="/profile/:userId" element={<PublicProfile />} />
         <Route path="/connections" element={<Connections />} />
         <Route path="/blocks" element={<Blocks />} />
+        <Route path="/notifications" element={<Notifications />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -4,7 +4,8 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select
 
-from app.models import Event, EventMessage, Profile, User
+from app.core.notifications import notify
+from app.models import Event, EventMessage, EventParticipant, Profile, User
 from app.routers.deps import (
     ACTIVE_PARTICIPANT_STATUSES,
     DB,
@@ -71,6 +72,28 @@ async def post_message(event_id: uuid.UUID, payload: MessageCreate, db: DB, user
 
     message = EventMessage(event_id=event.id, sender_id=user.id, body=payload.body)
     db.add(message)
+
+    # Notify the host and every active participant except the sender. notify()
+    # itself skips blocked pairs, so a blocked person won't be pinged.
+    recipients = set(
+        (
+            await db.scalars(
+                select(EventParticipant.user_id).where(
+                    EventParticipant.event_id == event.id,
+                    EventParticipant.status.in_(ACTIVE_PARTICIPANT_STATUSES),
+                )
+            )
+        ).all()
+    )
+    if event.host_id is not None:
+        recipients.add(event.host_id)
+    recipients.discard(user.id)
+    for recipient_id in recipients:
+        await notify(
+            db, user_id=recipient_id, type="event_message",
+            actor_id=user.id, event_id=event.id,
+        )
+
     await db.commit()
     await db.refresh(message)
     return MessageCreated(

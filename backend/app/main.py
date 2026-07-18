@@ -23,6 +23,7 @@ from app.routers import (
     geocode,
     interests,
     messages,
+    notifications,
     participants,
     profiles,
     reports,
@@ -91,6 +92,7 @@ app.include_router(participants.router)
 app.include_router(connections.router)
 app.include_router(blocks.router)
 app.include_router(messages.router)
+app.include_router(notifications.router)
 app.include_router(reports.router)
 
 # Uploaded files (avatars) served from local disk in development.

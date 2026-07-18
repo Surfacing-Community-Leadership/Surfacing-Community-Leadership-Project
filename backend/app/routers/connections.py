@@ -3,6 +3,7 @@ import uuid
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import and_, func, or_, select
 
+from app.core.notifications import notify
 from app.models import Connection, Profile, User
 from app.routers.deps import DB, CurrentUser, blocked_either_way
 from app.schemas.connection import (
@@ -75,6 +76,9 @@ async def request_connection(payload: ConnectionCreate, db: DB, user: CurrentUse
 
     connection = Connection(requester_id=user.id, addressee_id=payload.addressee_id)
     db.add(connection)
+    await notify(
+        db, user_id=payload.addressee_id, type="connection_request", actor_id=user.id
+    )
     await db.commit()
     await db.refresh(connection)
     return connection
@@ -94,6 +98,10 @@ async def accept_connection(
 
     connection.status = payload.status
     connection.responded_at = func.now()
+    # Tell the requester their request was accepted.
+    await notify(
+        db, user_id=connection.requester_id, type="connection_accepted", actor_id=user.id
+    )
     await db.commit()
     await db.refresh(connection)
     return connection

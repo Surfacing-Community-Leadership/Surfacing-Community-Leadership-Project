@@ -7,6 +7,7 @@ from app.models.connection import Connection
 from app.models.event import Event
 from app.models.interest import Interest, user_interests
 from app.models.message import EventMessage
+from app.models.notification import Notification
 from app.models.participant import EventParticipant
 from app.models.profile import Profile
 from app.models.report import Report
@@ -21,6 +22,7 @@ __all__ = [
     "EventMessage",
     "EventParticipant",
     "Interest",
+    "Notification",
     "Profile",
     "Report",
     "User",
