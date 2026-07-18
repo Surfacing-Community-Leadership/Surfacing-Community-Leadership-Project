@@ -180,6 +180,35 @@ async def test_ongoing_event_with_end_time_shows_until_it_ends(make_user):
     assert any(e["title"] == "Long picnic" for e in found)
 
 
+async def test_community_event_visible_to_fellow_member(make_user, community_id):
+    host = await make_user("host@example.com", "Host")
+    member = await make_user("member@example.com", "Member")
+    for c in (host, member):
+        await c.patch("/api/profiles/me", json={"community_id": community_id})
+
+    # Host doesn't pass community_id — it's derived from their profile so the
+    # event is actually scoped to (and visible within) their community.
+    ev = (
+        await host.post(
+            "/api/events", json=event_payload(title="Block party", visibility="community")
+        )
+    ).json()
+    found = (await member.get(NEARBY)).json()
+    assert any(e["id"] == ev["id"] for e in found)
+
+
+async def test_community_event_requires_membership(make_user):
+    loner = await make_user("loner@example.com", "Loner")
+    r = await loner.post("/api/events", json=event_payload(visibility="community"))
+    assert r.status_code == 422
+
+
+async def test_new_account_avatar_is_a_real_emoji(make_user):
+    user = await make_user("fresh@example.com", "Fresh")
+    profile = (await user.get("/api/profiles/me")).json()
+    assert profile["avatar_key"] == "🙂"  # not the literal string "default"
+
+
 async def test_event_tag_flows_to_summary_detail_and_map(make_user, interest_id):
     dylan = await make_user("dylan@example.com", "Dylan")
     created = (

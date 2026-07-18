@@ -10,6 +10,7 @@ from app.routers.deps import (
     CONFIRMED_PARTICIPANT_STATUSES,
     DB,
     CurrentUser,
+    blocked_counterparts,
     blocked_either_way,
     get_event_or_404,
     get_participation,
@@ -42,6 +43,9 @@ async def list_participants(
             select(EventParticipant, Profile)
             .join(Profile, Profile.user_id == EventParticipant.user_id)
             .where(EventParticipant.event_id == event.id)
+            # Hide anyone you have a block with (either direction) — e.g. in an
+            # event you both joined that a third person hosts.
+            .where(EventParticipant.user_id.not_in(blocked_counterparts(user.id)))
             .order_by(EventParticipant.created_at)
             .limit(limit)
             .offset(offset)

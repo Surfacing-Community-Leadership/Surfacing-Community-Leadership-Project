@@ -143,10 +143,22 @@ async def create_event(payload: EventCreate, db: DB, user: CurrentUser):
     await _validate_community(db, payload.community_id)
     tag = await _resolve_tag(db, payload.tag_id)
 
+    # A "community only" event is scoped to the host's OWN community — otherwise
+    # community_id stays NULL and the visibility clause can never match it, so
+    # the event would be invisible to the very people it's meant for.
+    community_id = payload.community_id
+    if payload.visibility == "community":
+        community_id = await get_my_community_id(db, user.id)
+        if community_id is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Join a community first to post a community-only event",
+            )
+
     event = Event(
         kind=payload.kind,
         host_id=user.id,
-        community_id=payload.community_id,
+        community_id=community_id,
         tag=tag,  # assigning the object also sets tag_id and keeps it loaded
         title=payload.title,
         description=payload.description,

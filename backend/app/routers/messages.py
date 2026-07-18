@@ -9,6 +9,7 @@ from app.routers.deps import (
     ACTIVE_PARTICIPANT_STATUSES,
     DB,
     CurrentUser,
+    blocked_counterparts,
     get_event_or_404,
     get_participation,
 )
@@ -44,6 +45,8 @@ async def list_messages(
             select(EventMessage, Profile.display_name)
             .join(Profile, Profile.user_id == EventMessage.sender_id)
             .where(EventMessage.event_id == event.id)
+            # Don't show messages from anyone you've blocked (or who blocked you).
+            .where(EventMessage.sender_id.not_in(blocked_counterparts(user.id)))
             .order_by(EventMessage.created_at)
             .limit(limit)
             .offset(offset)

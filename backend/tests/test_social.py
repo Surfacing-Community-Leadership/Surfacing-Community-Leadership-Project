@@ -86,6 +86,54 @@ async def test_block_severs_and_hides(make_user):
     assert r.status_code == 201
 
 
+async def test_block_hides_profile_both_ways(make_user):
+    eleanor = await make_user("eleanor@example.com", "Eleanor")
+    bob = await make_user("bob@example.com", "Bob")
+    eleanor_id, bob_id = await user_id(eleanor), await user_id(bob)
+    await eleanor.post("/api/blocks", json={"blocked_id": bob_id})
+
+    # Neither can open the other's profile by direct URL (404, not 403).
+    assert (await bob.get(f"/api/profiles/{eleanor_id}")).status_code == 404
+    assert (await eleanor.get(f"/api/profiles/{bob_id}")).status_code == 404
+
+
+async def test_block_removes_participation_in_hosts_event(make_user):
+    host = await make_user("host@example.com", "Host")
+    guest = await make_user("guest@example.com", "Guest")
+    guest_id = await user_id(guest)
+    event = (await host.post("/api/events", json=event_payload())).json()
+    await guest.put(f"/api/events/{event['id']}/rsvp", json={"status": "going"})
+
+    await host.post("/api/blocks", json={"blocked_id": guest_id})
+
+    parts = (await host.get(f"/api/events/{event['id']}/participants")).json()
+    assert all(p["user_id"] != guest_id for p in parts)
+
+
+async def test_block_hides_each_other_in_third_party_event(make_user):
+    host = await make_user("host@example.com", "Host")
+    ann = await make_user("ann@example.com", "Ann")
+    bo = await make_user("bo@example.com", "Bo")
+    ann_id, bo_id = await user_id(ann), await user_id(bo)
+    event = (await host.post("/api/events", json=event_payload())).json()
+    eid = event["id"]
+    for c in (ann, bo):
+        await c.put(f"/api/events/{eid}/rsvp", json={"status": "going"})
+    await ann.post(f"/api/events/{eid}/messages", json={"body": "hi from Ann"})
+    await bo.post(f"/api/events/{eid}/messages", json={"body": "hi from Bo"})
+
+    await ann.post("/api/blocks", json={"blocked_id": bo_id})
+
+    # Both remain in the host's event, but each is filtered from the other's
+    # view of the participant and message lists.
+    ann_parts = (await ann.get(f"/api/events/{eid}/participants")).json()
+    assert all(p["user_id"] != bo_id for p in ann_parts)
+    ann_msgs = (await ann.get(f"/api/events/{eid}/messages")).json()
+    assert all(m["sender_id"] != bo_id for m in ann_msgs)
+    bo_parts = (await bo.get(f"/api/events/{eid}/participants")).json()
+    assert all(p["user_id"] != ann_id for p in bo_parts)
+
+
 async def test_event_messages_scoped_to_participants(make_user):
     dylan = await make_user("dylan@example.com", "Dylan")
     eleanor = await make_user("eleanor@example.com", "Eleanor")

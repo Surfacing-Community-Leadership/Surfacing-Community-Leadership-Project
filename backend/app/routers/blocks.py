@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import delete, or_, and_, select
 
-from app.models import Block, Connection, Profile, User
+from app.models import Block, Connection, Event, EventParticipant, Profile, User
 from app.routers.deps import DB, CurrentUser
 from app.schemas.block import BlockCreate, BlockRead, BlockedUser
 
@@ -49,6 +49,25 @@ async def block_user(payload: BlockCreate, db: DB, user: CurrentUser):
                 and_(
                     Connection.requester_id == payload.blocked_id,
                     Connection.addressee_id == user.id,
+                ),
+            )
+        )
+    )
+    # ...and pulls each person out of any event the OTHER one hosts, so a block
+    # doesn't leave the blocked user sitting in the blocker's event (counting
+    # toward capacity, seeing the address, reading messages) or vice versa.
+    my_events = select(Event.id).where(Event.host_id == user.id)
+    their_events = select(Event.id).where(Event.host_id == payload.blocked_id)
+    await db.execute(
+        delete(EventParticipant).where(
+            or_(
+                and_(
+                    EventParticipant.user_id == payload.blocked_id,
+                    EventParticipant.event_id.in_(my_events),
+                ),
+                and_(
+                    EventParticipant.user_id == user.id,
+                    EventParticipant.event_id.in_(their_events),
                 ),
             )
         )

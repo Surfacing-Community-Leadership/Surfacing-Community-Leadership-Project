@@ -103,6 +103,19 @@ async def interest_id():
         return str(interest.id)
 
 
+@pytest.fixture
+async def community_id():
+    """Insert one community directly (the create API needs live OSM data)."""
+    from app.models import Community
+
+    async with AsyncSessionLocal() as session:
+        community = Community(name="Sunset Park", slug="sunset-park")
+        session.add(community)
+        await session.commit()
+        await session.refresh(community)
+        return str(community.id)
+
+
 SUNSET_PARK = {"lat": 40.6552, "lng": -74.0069}
 
 

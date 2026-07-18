@@ -7,7 +7,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Block, Community, Interest, Profile, User, user_interests
-from app.routers.deps import DB, CurrentUser
+from app.routers.deps import DB, CurrentUser, blocked_either_way
 from app.schemas.profile import InterestIds, ProfilePublic, ProfileRead, ProfileUpdate
 
 router = APIRouter(prefix="/api/profiles", tags=["profiles"])
@@ -131,6 +131,11 @@ async def replace_my_interests(payload: InterestIds, db: DB, user: CurrentUser):
 
 @router.get("/{user_id}", response_model=ProfilePublic)
 async def read_public_profile(user_id: uuid.UUID, db: DB, user: CurrentUser):
+    # A block in either direction hides the profile — and we 404 rather than
+    # 403 so it's indistinguishable from a non-existent user (the search
+    # endpoint already excludes blocked people; this closes the direct-URL path).
+    if user_id != user.id and await blocked_either_way(db, user.id, user_id):
+        raise HTTPException(status_code=404, detail="Profile not found")
     profile = await db.scalar(select(Profile).where(Profile.user_id == user_id))
     if profile is None:
         raise HTTPException(status_code=404, detail="Profile not found")

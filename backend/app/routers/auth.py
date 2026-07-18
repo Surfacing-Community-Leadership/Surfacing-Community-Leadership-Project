@@ -37,8 +37,11 @@ async def register(
         raise HTTPException(status_code=422, detail=exc.reason)
 
     # Every user gets a profile at birth; display_name comes from the
-    # registration form so the profile is never empty.
-    db.add(Profile(user_id=user.id, display_name=payload.display_name, avatar_key="default"))
+    # registration form so the profile is never empty. avatar_key doubles as an
+    # emoji label when it isn't an uploaded file path, so a neutral emoji is a
+    # sensible placeholder until they upload a photo (NOT the literal "default",
+    # which would render as that word).
+    db.add(Profile(user_id=user.id, display_name=payload.display_name, avatar_key="🙂"))
     await db.commit()
     return user
 
