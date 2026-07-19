@@ -170,7 +170,7 @@ export default function EventDetail() {
         <ConfirmDialog
           open={dialog === "delete"}
           title="Delete this event?"
-          body="This permanently removes the event, its RSVPs, and its messages. To call it off but keep the record, use Cancel event instead."
+          body="This permanently removes the event, its RSVPs, and its messages. Attendees will be notified. To call it off but keep the record, use Cancel event instead."
           confirmLabel="Delete forever"
           danger
           onConfirm={deleteEvent}

@@ -321,5 +321,21 @@ async def delete_event(event_id: uuid.UUID, db: DB, user: CurrentUser) -> None:
     event = await get_event_or_404(db, event_id)
     if event.host_id != user.id:
         raise HTTPException(status_code=403, detail="Only the host may delete this event")
+
+    # Cancelling notifies attendees; deleting must too — otherwise RSVP'd
+    # neighbors plan around an event that silently ceased to exist. The
+    # notification carries no event_id (the row is about to vanish); the
+    # renderer's copy carries the meaning instead.
+    attendee_ids = (
+        await db.scalars(
+            select(EventParticipant.user_id).where(
+                EventParticipant.event_id == event.id,
+                EventParticipant.status.in_(ACTIVE_PARTICIPANT_STATUSES),
+            )
+        )
+    ).all()
+    for attendee_id in attendee_ids:
+        await notify(db, user_id=attendee_id, type="event_deleted", actor_id=user.id)
+
     await db.delete(event)
     await db.commit()

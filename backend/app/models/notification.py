@@ -21,6 +21,7 @@ NOTIFICATION_TYPES = (
     "event_invite",       # someone invited you to their event
     "event_rsvp",         # someone RSVP'd to an event you host
     "event_cancelled",    # an event you're attending was cancelled
+    "event_deleted",      # an event you're attending was deleted outright
     "event_message",      # a new message in an event you're part of
     "connection_request", # someone asked to connect
     "connection_accepted",# someone accepted your connection request
@@ -36,7 +37,8 @@ class Notification(Base):
     __table_args__ = (
         CheckConstraint(
             "type IN ('event_invite', 'event_rsvp', 'event_cancelled', "
-            "'event_message', 'connection_request', 'connection_accepted')",
+            "'event_deleted', 'event_message', 'connection_request', "
+            "'connection_accepted')",
             name="ck_notifications_type",
         ),
         # Newest-first listing and the unread-count both filter by recipient.
@@ -55,10 +57,11 @@ class Notification(Base):
     actor_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
     )
-    # The event it's about (NULL for connection notifications). CASCADE: if the
-    # event is deleted, notifications about it go too rather than dangle.
+    # The event it's about (NULL for connection notifications). SET NULL: when
+    # an event is deleted the notification history survives — the renderer
+    # falls back to "an event" — instead of silently vanishing from inboxes.
     event_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("events.id", ondelete="CASCADE")
+        UUID(as_uuid=True), ForeignKey("events.id", ondelete="SET NULL")
     )
     is_read: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(

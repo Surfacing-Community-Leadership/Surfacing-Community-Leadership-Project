@@ -101,6 +101,21 @@ async def test_imported_event_shows_address_without_rsvp(make_user):
     assert detail["external_url"].startswith("https://www.ticketmaster.com/")
 
 
+async def test_rsvp_to_imported_event_shows_in_attending(make_user):
+    # Imported events have no host (host_id NULL); the attending list must
+    # keep them despite SQL's NULL != x three-valued logic.
+    async with AsyncSessionLocal() as session:
+        await upsert_events(session, [normalize_event(tm_payload())])
+
+    goer = await make_user("goer@example.com", "Goer")
+    listed = (await goer.get(NEARBY)).json()
+    event_id = next(e["id"] for e in listed if e["source"] == "imported")
+    await goer.put(f"/api/events/{event_id}/rsvp", json={"status": "going"})
+
+    attending = (await goer.get("/api/users/me/attending")).json()
+    assert any(e["id"] == event_id for e in attending)
+
+
 async def test_cancel_missing_hides_events_gone_from_source(make_user):
     keep = normalize_event(tm_payload())
     gone = normalize_event(tm_payload(id="ZZgone999", name="Vanished show"))
