@@ -25,12 +25,10 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 import httpx
-from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
-from app.core.geo import wkt_point
-from app.models import Event, Interest
+from scripts.import_common import cancel_missing, upsert_events
 
 DISCOVERY_URL = "https://app.ticketmaster.com/discovery/v2/events.json"
 USER_AGENT = "OursApp/0.1 (neighborhood community MVP)"
@@ -101,9 +99,14 @@ def normalize_event(item: dict) -> dict | None:
     }
 
 
-async def fetch_events(lat: float, lng: float, radius_km: int, days: int) -> list[dict]:
-    """Page through Discovery results around a point. Raises on HTTP errors —
-    an import script should fail loudly, not half-succeed silently."""
+async def fetch_events(
+    lat: float, lng: float, radius_km: int, days: int
+) -> tuple[list[dict], bool]:
+    """Page through Discovery results around a point. Returns (events,
+    complete) — complete is False when the API had more pages than our deep-
+    paging cap allows, meaning the caller saw a TRUNCATED view and must not
+    treat missing events as cancelled. Raises on HTTP errors — an import
+    script should fail loudly, not half-succeed silently."""
     now = datetime.now(timezone.utc)
     params = {
         "apikey": settings.ticketmaster_api_key,
@@ -117,6 +120,7 @@ async def fetch_events(lat: float, lng: float, radius_km: int, days: int) -> lis
         "endDateTime": (now + timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
     items: list[dict] = []
+    complete = True
     async with httpx.AsyncClient(timeout=20.0) as client:
         for page in range(MAX_PAGES):
             resp = await client.get(
@@ -131,70 +135,9 @@ async def fetch_events(lat: float, lng: float, radius_km: int, days: int) -> lis
             total_pages = (data.get("page") or {}).get("totalPages", 1)
             if page + 1 >= total_pages:
                 break
-    return items
-
-
-async def upsert_events(session, normalized: list[dict]) -> tuple[int, int]:
-    """Insert new imported events / update existing ones by external_ref.
-    Returns (created, updated). Importable so tests can drive it directly."""
-    slugs = {n["tag_slug"] for n in normalized if n["tag_slug"]}
-    tags_by_slug = {}
-    if slugs:
-        rows = (
-            await session.scalars(select(Interest).where(Interest.slug.in_(slugs)))
-        ).all()
-        tags_by_slug = {t.slug: t.id for t in rows}
-
-    created = updated = 0
-    for n in normalized:
-        values = {
-            "kind": n["kind"],
-            "title": n["title"],
-            "description": n["description"],
-            "location": wkt_point(n["lat"], n["lng"]),
-            "address": n["address"],
-            "starts_at": n["starts_at"],
-            "ends_at": n["ends_at"],
-            "visibility": "public",
-            "source": "imported",
-            "external_url": n["external_url"],
-            "tag_id": tags_by_slug.get(n["tag_slug"]),
-        }
-        existing = await session.scalar(
-            select(Event).where(Event.external_ref == n["external_ref"])
-        )
-        if existing is None:
-            session.add(Event(external_ref=n["external_ref"], **values))
-            created += 1
         else:
-            for field, value in values.items():
-                setattr(existing, field, value)
-            updated += 1
-    await session.commit()
-    return created, updated
-
-
-async def cancel_missing(session, fetched_refs: set[str], window_end: datetime) -> int:
-    """Imported events that Ticketmaster no longer returns as upcoming were
-    cancelled or removed at the source — mark them cancelled so the map's
-    status filter hides them. Scoped to ticketmaster/ rows starting inside the
-    window we actually fetched, so a narrower --days re-run can't wrongly
-    cancel events beyond its horizon."""
-    now = datetime.now(timezone.utc)
-    stmt = select(Event).where(
-        Event.source == "imported",
-        Event.external_ref.startswith("ticketmaster/"),
-        Event.starts_at > now,
-        Event.starts_at < window_end,
-        Event.status == "open",
-    )
-    if fetched_refs:
-        stmt = stmt.where(Event.external_ref.not_in(fetched_refs))
-    stale = (await session.scalars(stmt)).all()
-    for event in stale:
-        event.status = "cancelled"
-    await session.commit()
-    return len(stale)
+            complete = total_pages <= MAX_PAGES
+    return items, complete
 
 
 async def main() -> None:
@@ -213,16 +156,24 @@ async def main() -> None:
 
     print(f"Fetching events within {args.radius_km} km of "
           f"({args.lat}, {args.lng}) for the next {args.days} days…")
-    raw = await fetch_events(args.lat, args.lng, args.radius_km, args.days)
+    raw, complete = await fetch_events(args.lat, args.lng, args.radius_km, args.days)
     normalized = [n for n in (normalize_event(item) for item in raw) if n]
     skipped = len(raw) - len(normalized)
 
     window_end = datetime.now(timezone.utc) + timedelta(days=args.days)
     async with AsyncSessionLocal() as session:
         created, updated = await upsert_events(session, normalized)
-        cancelled = await cancel_missing(
-            session, {n["external_ref"] for n in normalized}, window_end
-        )
+        cancelled = 0
+        if complete:
+            # Sweep ONLY this fetch's area — never other cities' rows.
+            cancelled = await cancel_missing(
+                session, {n["external_ref"] for n in normalized}, window_end,
+                ref_prefix="ticketmaster/",
+                center=(args.lat, args.lng), radius_m=args.radius_km * 1000,
+            )
+        else:
+            print("  fetch hit the paging cap (truncated view) — skipping the "
+                  "cancelled-events sweep for safety")
 
     print(f"Done: {created} created, {updated} updated, {cancelled} marked "
           f"cancelled, {skipped} skipped (no coords/date or cancelled at source).")

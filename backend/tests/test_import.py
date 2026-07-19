@@ -3,7 +3,8 @@
 from datetime import datetime, timedelta, timezone
 
 from app.core.database import AsyncSessionLocal
-from scripts.import_ticketmaster import cancel_missing, normalize_event, upsert_events
+from scripts.import_common import cancel_missing, upsert_events
+from scripts.import_ticketmaster import normalize_event
 
 NEARBY = "/api/events?lat=40.6552&lng=-74.0069&radius_m=3000"
 
@@ -108,7 +109,9 @@ async def test_cancel_missing_hides_events_gone_from_source(make_user):
         await upsert_events(session, [keep, gone])
         # A re-import inside the window that no longer returns "gone":
         window_end = datetime.now(timezone.utc) + timedelta(days=400)
-        cancelled = await cancel_missing(session, {keep["external_ref"]}, window_end)
+        cancelled = await cancel_missing(
+            session, {keep["external_ref"]}, window_end, ref_prefix="ticketmaster/"
+        )
         assert cancelled == 1
 
     viewer = await make_user("viewer@example.com", "Viewer")
