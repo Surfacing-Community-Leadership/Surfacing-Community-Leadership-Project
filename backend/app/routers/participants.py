@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import and_, func, or_, select
 
 from app.core.notifications import notify
-from app.models import Connection, EventParticipant, Profile, User
+from app.models import Connection, Event, EventParticipant, Notification, Profile, User
 from app.routers.deps import (
     ACTIVE_PARTICIPANT_STATUSES,
     CONFIRMED_PARTICIPANT_STATUSES,
@@ -26,6 +26,31 @@ from app.schemas.participant import (
 )
 
 router = APIRouter(prefix="/api/events/{event_id}", tags=["participation"])
+
+
+async def _confirmed_count(db, event_id) -> int:
+    return await db.scalar(
+        select(func.count())
+        .select_from(EventParticipant)
+        .where(
+            EventParticipant.event_id == event_id,
+            EventParticipant.status.in_(CONFIRMED_PARTICIPANT_STATUSES),
+        )
+    )
+
+
+async def _sync_full_status(db, event: Event) -> None:
+    """Keep the open⇄full status in step with capacity: filling the last seat
+    flips the event to 'full' (so the map shows it honestly), and a withdrawal
+    reopens it. Never touches cancelled/completed, and capacity-less events
+    are always just open."""
+    if event.capacity is None or event.status not in ("open", "full"):
+        return
+    confirmed = await _confirmed_count(db, event.id)
+    if confirmed >= event.capacity and event.status == "open":
+        event.status = "full"
+    elif confirmed < event.capacity and event.status == "full":
+        event.status = "open"
 
 
 @router.get("/participants", response_model=list[ParticipantRead])
@@ -79,15 +104,7 @@ async def set_rsvp(event_id: uuid.UUID, payload: RsvpPayload, db: DB, user: Curr
             and participation.status in CONFIRMED_PARTICIPANT_STATUSES
         )
         if event.capacity is not None and not already_confirmed:
-            confirmed = await db.scalar(
-                select(func.count())
-                .select_from(EventParticipant)
-                .where(
-                    EventParticipant.event_id == event.id,
-                    EventParticipant.status.in_(CONFIRMED_PARTICIPANT_STATUSES),
-                )
-            )
-            if confirmed >= event.capacity:
+            if await _confirmed_count(db, event.id) >= event.capacity:
                 raise HTTPException(status_code=409, detail="This event is full")
 
     if participation is None:
@@ -97,12 +114,28 @@ async def set_rsvp(event_id: uuid.UUID, payload: RsvpPayload, db: DB, user: Curr
         db.add(participation)
     else:
         participation.status = payload.status
-    # Let the host know when someone's coming (not on a "declined").
+
+    # Let the host know when someone's coming (not on a "declined") — but only
+    # once per unread stretch, so toggling going/maybe doesn't ping them again.
     if event.host_id is not None and payload.status in ("going", "maybe"):
-        await notify(
-            db, user_id=event.host_id, type="event_rsvp",
-            actor_id=user.id, event_id=event.id,
+        already_pinged = await db.scalar(
+            select(Notification.id).where(
+                Notification.user_id == event.host_id,
+                Notification.actor_id == user.id,
+                Notification.event_id == event.id,
+                Notification.type == "event_rsvp",
+                Notification.is_read.is_(False),
+            )
         )
+        if already_pinged is None:
+            await notify(
+                db, user_id=event.host_id, type="event_rsvp",
+                actor_id=user.id, event_id=event.id,
+            )
+
+    # Filling the last seat flips the event to 'full'; downgrading a confirmed
+    # RSVP (going -> maybe/declined) can reopen it.
+    await _sync_full_status(db, event)
     await db.commit()
     return RsvpRead(event_id=event.id, user_id=user.id, status=payload.status)
 
@@ -114,6 +147,7 @@ async def withdraw_rsvp(event_id: uuid.UUID, db: DB, user: CurrentUser) -> None:
     if participation is None:
         raise HTTPException(status_code=404, detail="You are not participating")
     await db.delete(participation)
+    await _sync_full_status(db, event)  # a freed seat can reopen a full event
     await db.commit()
 
 

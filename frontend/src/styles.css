@@ -437,6 +437,12 @@ button.danger {
   border: 1px solid var(--line);
   margin-left: 0.35rem;
 }
+.tag-imported {
+  background: #f3f4f6;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  margin-left: 0.35rem;
+}
 
 /* ---- Messages ---- */
 .messages {

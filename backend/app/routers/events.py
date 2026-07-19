@@ -2,9 +2,10 @@ import uuid
 from datetime import datetime, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from sqlalchemy import and_, func, or_, select
 
+from app.core.area_import import maybe_schedule_area_import
 from app.core.geo import to_latlng, wkt_point
 from app.core.notifications import notify
 from app.models import Community, Event, EventParticipant, Interest, user_interests
@@ -60,6 +61,7 @@ def _summary(event: Event, distance_m: float | None = None) -> EventSummary:
         starts_at=event.starts_at,
         visibility=event.visibility,
         status=event.status,
+        source=event.source,
         distance_m=round(distance_m, 1) if distance_m is not None else None,
         tag_slug=event.tag.slug if event.tag else None,
         tag_name=event.tag.name if event.tag else None,
@@ -100,6 +102,7 @@ async def _require_own_community_id(db, user):
 async def discover_events(
     db: DB,
     user: CurrentUser,
+    background_tasks: BackgroundTasks,
     lat: Annotated[float, Query(ge=-90, le=90)],
     lng: Annotated[float, Query(ge=-180, le=180)],
     radius_m: Annotated[int, Query(gt=0, le=100_000)] = 5000,
@@ -115,6 +118,9 @@ async def discover_events(
     """The map query: visible events within radius_m of (lat, lng),
     nearest first. Defaults to upcoming events only. Optional tag_id filters to
     one category; matching_interests limits to categories the user follows."""
+    # First view of a cold/stale area kicks off a background import of
+    # external events for it — the map works anywhere, no per-city setup.
+    maybe_schedule_area_import(background_tasks, lat, lng)
     my_community_id = await get_my_community_id(db, user.id)
     point = func.ST_GeogFromText(wkt_point(lat, lng))
     distance = func.ST_Distance(Event.location, point).label("distance_m")
@@ -212,8 +218,9 @@ async def read_event(event_id: uuid.UUID, db: DB, user: CurrentUser):
     )
 
     # The precise address is only for the host and confirmed participants;
-    # everyone else gets the map point and community only.
-    show_address = event.host_id == user.id
+    # everyone else gets the map point and community only. Imported events are
+    # the exception: their venue is public information at the source already.
+    show_address = event.host_id == user.id or event.source == "imported"
     if not show_address:
         participation = await get_participation(db, event.id, user.id)
         show_address = (
@@ -314,5 +321,21 @@ async def delete_event(event_id: uuid.UUID, db: DB, user: CurrentUser) -> None:
     event = await get_event_or_404(db, event_id)
     if event.host_id != user.id:
         raise HTTPException(status_code=403, detail="Only the host may delete this event")
+
+    # Cancelling notifies attendees; deleting must too — otherwise RSVP'd
+    # neighbors plan around an event that silently ceased to exist. The
+    # notification carries no event_id (the row is about to vanish); the
+    # renderer's copy carries the meaning instead.
+    attendee_ids = (
+        await db.scalars(
+            select(EventParticipant.user_id).where(
+                EventParticipant.event_id == event.id,
+                EventParticipant.status.in_(ACTIVE_PARTICIPANT_STATUSES),
+            )
+        )
+    ).all()
+    for attendee_id in attendee_ids:
+        await notify(db, user_id=attendee_id, type="event_deleted", actor_id=user.id)
+
     await db.delete(event)
     await db.commit()

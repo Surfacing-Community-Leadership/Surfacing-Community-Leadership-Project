@@ -5,6 +5,7 @@ from app.models.block import Block
 from app.models.community import Community
 from app.models.connection import Connection
 from app.models.event import Event
+from app.models.import_area import ImportArea
 from app.models.interest import Interest, user_interests
 from app.models.message import EventMessage
 from app.models.notification import Notification
@@ -21,6 +22,7 @@ __all__ = [
     "Event",
     "EventMessage",
     "EventParticipant",
+    "ImportArea",
     "Interest",
     "Notification",
     "Profile",

@@ -330,6 +330,26 @@ async def test_edit_to_community_visibility_scopes_and_shows(make_user, communit
     assert any(e["id"] == ev["id"] for e in found)
 
 
+async def test_capacity_auto_flips_full_and_reopens(make_user):
+    host = await make_user("host@example.com", "Host")
+    guest = await make_user("guest@example.com", "Guest")
+    ev = (await host.post("/api/events", json=event_payload(capacity=1))).json()
+    url = f"/api/events/{ev['id']}"
+
+    # Filling the last seat flips status to 'full' without host action…
+    await guest.put(f"{url}/rsvp", json={"status": "going"})
+    assert (await host.get(url)).json()["status"] == "full"
+
+    # …a second would-be attendee is refused…
+    other = await make_user("other@example.com", "Other")
+    assert (await other.put(f"{url}/rsvp", json={"status": "going"})).status_code == 409
+
+    # …and a withdrawal reopens the seat and the status.
+    await guest.delete(f"{url}/rsvp")
+    assert (await host.get(url)).json()["status"] == "open"
+    assert (await other.put(f"{url}/rsvp", json={"status": "going"})).status_code == 200
+
+
 async def test_my_events_lists_only_my_creations(make_user):
     dylan = await make_user("dylan@example.com", "Dylan")
     eleanor = await make_user("eleanor@example.com", "Eleanor")

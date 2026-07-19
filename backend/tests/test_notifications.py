@@ -48,7 +48,42 @@ async def test_rsvp_notifies_host(make_user):
     await guest.put(f"/api/events/{event['id']}/rsvp", json={"status": "going"})
 
     rsvp = next(n for n in await notifs(host) if n["type"] == "event_rsvp")
-    assert "is going to Board games" in rsvp["message"]
+    assert "RSVP'd to Board games" in rsvp["message"]
+
+
+async def test_rsvp_toggling_notifies_once_per_unread_stretch(make_user):
+    host = await make_user("host@example.com", "Host")
+    guest = await make_user("guest@example.com", "Guest")
+    event = (await host.post("/api/events", json=event_payload())).json()
+
+    # going -> maybe -> going: one unread notification, not three.
+    for status in ("going", "maybe", "going"):
+        await guest.put(f"/api/events/{event['id']}/rsvp", json={"status": status})
+    rsvps = [n for n in await notifs(host) if n["type"] == "event_rsvp"]
+    assert len(rsvps) == 1
+
+    # Once the host has read it, fresh activity may notify again.
+    await host.post("/api/notifications/read")
+    await guest.put(f"/api/events/{event['id']}/rsvp", json={"status": "maybe"})
+    rsvps = [n for n in await notifs(host) if n["type"] == "event_rsvp"]
+    assert len(rsvps) == 2
+
+
+async def test_delete_notifies_attendees(make_user):
+    host = await make_user("host@example.com", "Host")
+    guest = await make_user("guest@example.com", "Guest")
+    event = (await host.post("/api/events", json=event_payload(title="Gone soon"))).json()
+    await guest.put(f"/api/events/{event['id']}/rsvp", json={"status": "going"})
+    await host.post("/api/notifications/read")  # clear the RSVP ping
+
+    r = await host.delete(f"/api/events/{event['id']}")
+    assert r.status_code == 204
+
+    deleted = [n for n in await notifs(guest) if n["type"] == "event_deleted"]
+    assert len(deleted) == 1
+    assert "deleted an event" in deleted[0]["message"]
+    # The earlier notification history survives the event's deletion too.
+    assert await unread(guest) >= 1
 
 
 async def test_cancel_notifies_attendees(make_user):

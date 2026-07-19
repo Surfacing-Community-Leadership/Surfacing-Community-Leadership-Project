@@ -18,8 +18,10 @@ def _render(n: Notification, actor_name: str | None, event_title: str | None):
     event_link = f"/events/{n.event_id}" if n.event_id else None
     return {
         "event_invite": (f"{actor} invited you to {title}", event_link),
-        "event_rsvp": (f"{actor} is going to {title}", event_link),
+        # "RSVP'd", not "is going" — this fires for maybe as well as going.
+        "event_rsvp": (f"{actor} RSVP'd to {title}", event_link),
         "event_cancelled": (f"{title} was cancelled", event_link),
+        "event_deleted": (f"{actor} deleted an event you'd joined", None),
         "event_message": (f"{actor} posted in {title}", event_link),
         "connection_request": (f"{actor} wants to connect", "/connections"),
         "connection_accepted": (

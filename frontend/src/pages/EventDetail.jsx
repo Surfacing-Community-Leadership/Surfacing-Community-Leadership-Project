@@ -85,6 +85,11 @@ export default function EventDetail() {
               {tagIcon(event.tag_slug)} {event.tag_name}
             </span>
           )}
+          {event.source === "imported" && (
+            <span className="tag tag-imported" title="Found outside Ours">
+              Imported ↗
+            </span>
+          )}
           <h1>{event.title}</h1>
           <p className="muted">
             {new Date(event.starts_at).toLocaleString()}
@@ -97,6 +102,13 @@ export default function EventDetail() {
             </p>
           ) : (
             <p className="muted">Exact address shown once you're going.</p>
+          )}
+          {event.external_url && (
+            <p>
+              <a href={event.external_url} target="_blank" rel="noreferrer">
+                Event page & tickets ↗
+              </a>
+            </p>
           )}
           <p className="muted">
             {event.participant_count} going
@@ -158,7 +170,7 @@ export default function EventDetail() {
         <ConfirmDialog
           open={dialog === "delete"}
           title="Delete this event?"
-          body="This permanently removes the event, its RSVPs, and its messages. To call it off but keep the record, use Cancel event instead."
+          body="This permanently removes the event, its RSVPs, and its messages. Attendees will be notified. To call it off but keep the record, use Cancel event instead."
           confirmLabel="Delete forever"
           danger
           onConfirm={deleteEvent}

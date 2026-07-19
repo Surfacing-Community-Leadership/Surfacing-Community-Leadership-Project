@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.core.geo import to_latlng
 from app.models import Event, EventParticipant
@@ -22,6 +22,7 @@ def _summary(e: Event, my_rsvp: str | None = None) -> EventSummary:
         starts_at=e.starts_at,
         visibility=e.visibility,
         status=e.status,
+        source=e.source,
         my_rsvp=my_rsvp,
         tag_slug=e.tag.slug if e.tag else None,
         tag_name=e.tag.name if e.tag else None,
@@ -62,7 +63,10 @@ async def my_attending(user: CurrentUser, db: DB):
             .join(EventParticipant, EventParticipant.event_id == Event.id)
             .where(EventParticipant.user_id == user.id)
             .where(EventParticipant.status.in_(("going", "maybe")))
-            .where(Event.host_id != user.id)
+            # NULL hosts must be kept explicitly (SQL: NULL != x is not true):
+            # imported events have no host, and they're the main thing people
+            # RSVP to that they didn't create.
+            .where(or_(Event.host_id.is_(None), Event.host_id != user.id))
             .where(Event.status != "cancelled")
             .where(not_ended_clause(now))
             .order_by(Event.starts_at)
