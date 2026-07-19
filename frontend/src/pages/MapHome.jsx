@@ -116,7 +116,7 @@ export default function MapHome() {
                 <span className="event-list-body">
                   <strong>{ev.title}</strong>
                   <span className="muted">
-                    {ev.kind === "help_request" ? "Help request" : "Gathering"}
+                    {ev.source === "imported" ? "Around town ↗" : ev.kind === "help_request" ? "Help request" : "Gathering"}
                     {ev.tag_name && ` · ${ev.tag_name}`}
                     {ev.distance_m != null && ` · ${formatDistance(ev.distance_m)}`}
                   </span>

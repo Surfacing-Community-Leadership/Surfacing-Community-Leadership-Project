@@ -73,6 +73,10 @@ class Event(Base):
     status: Mapped[str] = mapped_column(Text, server_default=text("'open'"))
     source: Mapped[str] = mapped_column(Text, server_default=text("'user'"))
     external_url: Mapped[str | None] = mapped_column(Text)
+    # Stable identity of an imported event in its source system, namespaced
+    # like "ticketmaster/G5vYZ9..." (same pattern as communities.osm_ref).
+    # Unique so a re-import updates the existing row instead of duplicating.
+    external_ref: Mapped[str | None] = mapped_column(Text, unique=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()")
     )

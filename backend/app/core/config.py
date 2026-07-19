@@ -13,5 +13,8 @@ class Settings(BaseSettings):
 
     cors_origins: list[str] = ["http://localhost:5173"]
 
+    # Free key from developer.ticketmaster.com; only the import script needs it.
+    ticketmaster_api_key: str | None = None
+
 
 settings = Settings()

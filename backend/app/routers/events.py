@@ -60,6 +60,7 @@ def _summary(event: Event, distance_m: float | None = None) -> EventSummary:
         starts_at=event.starts_at,
         visibility=event.visibility,
         status=event.status,
+        source=event.source,
         distance_m=round(distance_m, 1) if distance_m is not None else None,
         tag_slug=event.tag.slug if event.tag else None,
         tag_name=event.tag.name if event.tag else None,
@@ -212,8 +213,9 @@ async def read_event(event_id: uuid.UUID, db: DB, user: CurrentUser):
     )
 
     # The precise address is only for the host and confirmed participants;
-    # everyone else gets the map point and community only.
-    show_address = event.host_id == user.id
+    # everyone else gets the map point and community only. Imported events are
+    # the exception: their venue is public information at the source already.
+    show_address = event.host_id == user.id or event.source == "imported"
     if not show_address:
         participation = await get_participation(db, event.id, user.id)
         show_address = (
