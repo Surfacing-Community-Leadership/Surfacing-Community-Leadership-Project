@@ -2,9 +2,10 @@ import uuid
 from datetime import datetime, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from sqlalchemy import and_, func, or_, select
 
+from app.core.area_import import maybe_schedule_area_import
 from app.core.geo import to_latlng, wkt_point
 from app.core.notifications import notify
 from app.models import Community, Event, EventParticipant, Interest, user_interests
@@ -101,6 +102,7 @@ async def _require_own_community_id(db, user):
 async def discover_events(
     db: DB,
     user: CurrentUser,
+    background_tasks: BackgroundTasks,
     lat: Annotated[float, Query(ge=-90, le=90)],
     lng: Annotated[float, Query(ge=-180, le=180)],
     radius_m: Annotated[int, Query(gt=0, le=100_000)] = 5000,
@@ -116,6 +118,9 @@ async def discover_events(
     """The map query: visible events within radius_m of (lat, lng),
     nearest first. Defaults to upcoming events only. Optional tag_id filters to
     one category; matching_interests limits to categories the user follows."""
+    # First view of a cold/stale area kicks off a background import of
+    # external events for it — the map works anywhere, no per-city setup.
+    maybe_schedule_area_import(background_tasks, lat, lng)
     my_community_id = await get_my_community_id(db, user.id)
     point = func.ST_GeogFromText(wkt_point(lat, lng))
     distance = func.ST_Distance(Event.location, point).label("distance_m")

@@ -15,6 +15,9 @@ os.environ["DATABASE_URL"] = (
 )
 os.environ["SECRET_KEY"] = "test-secret-key-not-for-production"
 os.environ["COOKIE_SECURE"] = "false"
+# Force the key EMPTY so map-query tests never schedule real network imports
+# (the developer's .env may hold a real key; env vars beat .env values).
+os.environ["TICKETMASTER_API_KEY"] = ""
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -53,7 +56,7 @@ async def clean_tables(test_database):
     yield
     async with engine.begin() as conn:
         await conn.execute(
-            text("TRUNCATE users, events, communities, interests CASCADE")
+            text("TRUNCATE users, events, communities, interests, import_areas CASCADE")
         )
 
 
