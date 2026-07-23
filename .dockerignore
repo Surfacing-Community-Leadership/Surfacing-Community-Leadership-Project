@@ -1,0 +1,16 @@
+# Keep the build context small and free of secrets / local cruft.
+**/node_modules
+**/.venv
+**/__pycache__
+**/*.pyc
+**/*.egg-info
+backend/media
+frontend/dist
+.git
+.gitignore
+frontend_help
+docs
+**/.env
+**/.env.*
+!**/.env.example
+**/.DS_Store

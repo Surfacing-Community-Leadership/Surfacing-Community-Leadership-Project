@@ -128,3 +128,30 @@ then log in at http://localhost:8000/admin.
 **Tests:** `cd backend && .venv/bin/pytest` (creates and uses a disposable
 `ours_test` database). The curl smoke test is
 `backend/scripts/smoke_test.sh` — reset dev data first as noted in its header.
+
+## Deploy to Render
+
+The repo ships a [`Dockerfile`](Dockerfile) (builds the React SPA, then runs the
+API which serves that build from the **same origin** — so the auth cookie +
+CSRF flow needs no cross-site setup) and a [`render.yaml`](render.yaml)
+blueprint (one web service + one managed Postgres).
+
+1. Push this repo to GitHub.
+2. In Render: **New + → Blueprint**, pick the repo. It reads `render.yaml` and
+   creates the `ours` web service and the `ours-db` Postgres.
+3. Render sets `DATABASE_URL` (rewritten to the async driver in
+   [config.py](backend/app/core/config.py)) and generates `SECRET_KEY`;
+   `COOKIE_SECURE` is `true`. Set `TICKETMASTER_API_KEY` only if you want
+   real-world event import.
+4. First deploy runs `alembic upgrade head`, which **enables PostGIS** (baseline
+   migration) and builds the schema. When it's live, open the service URL and
+   register an account.
+
+Notes:
+- Render's managed Postgres supports PostGIS; the migration turns it on
+  automatically, so no manual `CREATE EXTENSION` step.
+- Uploaded avatars are written to the container's local disk, which is
+  **ephemeral** on Render — they're lost on redeploy. Wire up object storage
+  (S3) before relying on them (see the roadmap).
+- Any Docker host works the same way: build the image and run it with
+  `DATABASE_URL`, `SECRET_KEY` and `COOKIE_SECURE=true` set.

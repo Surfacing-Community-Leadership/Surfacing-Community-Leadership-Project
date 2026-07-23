@@ -1,0 +1,32 @@
+# Render blueprint — one web service (API + built SPA) and one managed
+# Postgres. Deploy with the Render dashboard's "New + → Blueprint" pointed at
+# this repo, or `render blueprint launch`. See README "Deploy to Render".
+databases:
+  - name: ours-db
+    databaseName: ours
+    plan: free
+    postgresMajorVersion: "16"
+
+services:
+  - type: web
+    name: ours
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # Render hands out a postgres:// URL; config.py rewrites it to asyncpg.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ours-db
+          property: connectionString
+      # A strong random secret, generated once by Render and kept stable.
+      - key: SECRET_KEY
+        generateValue: true
+      # HTTPS in production → secure auth cookies.
+      - key: COOKIE_SECURE
+        value: "true"
+      # Optional: real-world event import. Leave unset to disable.
+      # - key: TICKETMASTER_API_KEY
+      #   sync: false
