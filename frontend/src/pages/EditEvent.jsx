@@ -4,8 +4,6 @@ import { useApi } from "../hooks/useApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 import EventForm from "../components/EventForm.jsx";
 
-// Converts a stored UTC ISO string into the local "YYYY-MM-DDTHH:MM" a
-// datetime-local input expects, so the form shows the host their own timezone.
 function isoToLocal(iso) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -18,17 +16,26 @@ export default function EditEvent() {
   const { user } = useAuth();
   const { data: event, error, loading } = useApi(() => api.get(`/api/events/${id}`), [id]);
 
-  if (loading) return <div className="centered muted">Loading…</div>;
-  if (error) return <div className="alert">{error}</div>;
+  if (loading) return <div className="org centered muted">Loading…</div>;
+  if (error)
+    return (
+      <div className="org narrow">
+        <div className="alert">{error}</div>
+      </div>
+    );
   if (event.host_id !== user.id) {
-    return <div className="alert">Only the host can edit this event.</div>;
+    return (
+      <div className="org narrow">
+        <div className="alert">Only the host can edit this event.</div>
+      </div>
+    );
   }
 
   const initial = {
     kind: event.kind,
     title: event.title,
     description: event.description || "",
-    location: event.location, // { lat, lng }
+    location: event.location,
     address: event.address || "",
     startsAt: isoToLocal(event.starts_at),
     endsAt: isoToLocal(event.ends_at),
@@ -43,9 +50,12 @@ export default function EditEvent() {
   }
 
   return (
-    <div className="narrow">
+    <div className="org narrow">
+      <span className="kicker">Editing</span>
       <h1>Edit {event.kind === "help_request" ? "help request" : "event"}</h1>
-      <EventForm initial={initial} submitLabel="Save changes" onSubmit={save} lockKind />
+      <div style={{ marginTop: "20px" }}>
+        <EventForm initial={initial} submitLabel="Save changes" onSubmit={save} lockKind />
+      </div>
     </div>
   );
 }

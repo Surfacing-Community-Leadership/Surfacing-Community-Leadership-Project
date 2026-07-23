@@ -5,9 +5,12 @@ import { useApi } from "../hooks/useApi.js";
 import Field from "../components/Field.jsx";
 import CommunityPicker from "../components/CommunityPicker.jsx";
 
-// The signed-in user's own editable profile. This is the one place to manage
-// everything the first-run "quick setup" (Onboarding) collects — community,
-// interests, and preferences — so there's no separate page to visit later.
+function initial(name) {
+  return (name || "?").trim().charAt(0).toUpperCase();
+}
+
+// The signed-in user's own editable profile — community, interests and
+// preferences all in one place, so there's no separate settings page.
 export default function Profile() {
   const { data, error, loading } = useApi(async () => {
     const [profile, interests, myInterests] = await Promise.all([
@@ -20,13 +23,10 @@ export default function Profile() {
 
   const [form, setForm] = useState(null);
   const [selectedInterests, setSelectedInterests] = useState(new Set());
-  // Avatar lives in its own state (not `form`) so uploading it can update the
-  // preview without re-seeding — and discarding — the user's unsaved edits.
   const [avatarKey, setAvatarKey] = useState(null);
   const [status, setStatus] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  // Seed the form once the profile and interests arrive.
   useEffect(() => {
     if (!data?.profile) return;
     const p = data.profile;
@@ -41,8 +41,13 @@ export default function Profile() {
     setAvatarKey(p.avatar_key);
   }, [data]);
 
-  if (loading || !form) return <div className="centered muted">Loading…</div>;
-  if (error) return <div className="alert">{error}</div>;
+  if (loading || !form) return <div className="org centered muted">Loading…</div>;
+  if (error)
+    return (
+      <div className="org narrow">
+        <div className="alert">{error}</div>
+      </div>
+    );
 
   const set = (key) => (e) => {
     const value = e.target.type === "checkbox" ? e.target.checked : e.target.value;
@@ -64,8 +69,6 @@ export default function Profile() {
     const formData = new FormData();
     formData.append("file", file);
     try {
-      // Update only the preview from the response — don't reload the whole
-      // profile, which would reseed the form and lose unsaved edits.
       const updated = await api.upload("/api/profiles/me/avatar", formData);
       setAvatarKey(updated.avatar_key);
       setStatus("Avatar updated.");
@@ -79,8 +82,6 @@ export default function Profile() {
     setSaving(true);
     setStatus(null);
     try {
-      // Profile fields and interests live behind two endpoints (PATCH the
-      // profile, PUT the full interest set), same as first-run onboarding.
       await api.patch("/api/profiles/me", {
         ...form,
         community_id: form.community_id || null,
@@ -96,10 +97,13 @@ export default function Profile() {
     }
   }
 
+  const imgSrc = avatarUrl(avatarKey);
+
   return (
-    <div className="narrow">
+    <div className="org narrow">
+      <span className="kicker">Yours to tend</span>
       <h1>Your profile</h1>
-      <form className="card" onSubmit={save}>
+      <form className="card" onSubmit={save} style={{ marginTop: "20px" }}>
         {status && <div className="muted">{status}</div>}
         <Field label="Display name">
           <input value={form.display_name} onChange={set("display_name")} required maxLength={80} />
@@ -109,21 +113,14 @@ export default function Profile() {
         </Field>
         <Field label="Avatar" hint="JPEG, PNG or WebP, up to 2 MB.">
           <div className="row-actions">
-            {avatarUrl(avatarKey) ? (
-              <img className="avatar-img" src={avatarUrl(avatarKey)} alt="Your avatar" />
+            {imgSrc ? (
+              <img className="avatar-img" src={imgSrc} alt="Your avatar" />
             ) : (
-              <span className="avatar-lg">{avatarKey || "🙂"}</span>
+              <span className="avatar-initial">{initial(form.display_name)}</span>
             )}
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              onChange={onAvatarPick}
-            />
+            <input type="file" accept="image/jpeg,image/png,image/webp" onChange={onAvatarPick} />
           </div>
         </Field>
-        {/* Community and Interests use div.field (not <Field>, which wraps a
-            <label>) — nesting the picker/chip buttons inside a label is
-            invalid and forwards stray clicks. */}
         <div className="field">
           <span className="field-label">Community</span>
           <CommunityPicker
@@ -155,8 +152,8 @@ export default function Profile() {
           <input type="checkbox" checked={form.show_attending} onChange={set("show_attending")} />
           Let connections see what I'm attending
         </label>
-        <button type="submit" disabled={saving}>
-          {saving ? "Saving…" : "Save"}
+        <button type="submit" disabled={saving} style={{ alignSelf: "flex-start" }}>
+          {saving ? "Saving…" : "Save changes"}
         </button>
       </form>
       <p className="muted">

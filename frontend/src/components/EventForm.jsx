@@ -7,25 +7,17 @@ import AddressAutocomplete from "./AddressAutocomplete.jsx";
 import { useGeolocation } from "../hooks/useGeolocation.js";
 import { tagIcon } from "../lib/tagIcons.js";
 
-// The current local wall-clock time as "YYYY-MM-DDTHH:MM" — the format a
-// datetime-local input's `min` expects. Shifting by the timezone offset makes
-// the UTC-based toISOString() read out local time.
+// The current local wall-clock time as "YYYY-MM-DDTHH:MM" for a datetime-local
+// input's `min`.
 function localNow() {
   const now = new Date();
   return new Date(now - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 }
 
-// The shared create/edit form for events and help requests. The parent owns
-// what "submit" means (POST vs PATCH, where to navigate); this component owns
-// the fields, validation, and payload shape so the two flows never drift.
-//
-// Props:
-//   initial      - seed values { kind, title, description, location, address,
-//                  startsAt, endsAt, visibility, capacity, tagId }
-//   submitLabel  - text for the submit button
-//   onSubmit     - async (payload) => void; throws to surface an error here
-//   lockKind     - true on edit: the gathering/help-request type is fixed
-//   enforceFutureStart - true on create: disallow scheduling in the past
+// Shared create/edit form for events and help requests. The parent owns what
+// "submit" means (POST vs PATCH, where to navigate); this owns fields,
+// validation and payload shape. The form tints itself to its type (sage for a
+// gathering, terracotta for a help request).
 export default function EventForm({
   initial = {},
   submitLabel = "Save",
@@ -33,14 +25,14 @@ export default function EventForm({
   lockKind = false,
   enforceFutureStart = false,
 }) {
-  const here = useGeolocation(); // [lat, lng]; null until located
+  const here = useGeolocation();
   const minStart = enforceFutureStart ? localNow() : undefined;
   const { data: interests } = useApi(() => api.get("/api/interests"));
 
   const [kind, setKind] = useState(initial.kind ?? "gathering");
   const [title, setTitle] = useState(initial.title ?? "");
   const [description, setDescription] = useState(initial.description ?? "");
-  const [location, setLocation] = useState(initial.location ?? null); // { lat, lng }
+  const [location, setLocation] = useState(initial.location ?? null);
   const [address, setAddress] = useState(initial.address ?? "");
   const [startsAt, setStartsAt] = useState(initial.startsAt ?? "");
   const [endsAt, setEndsAt] = useState(initial.endsAt ?? "");
@@ -50,7 +42,6 @@ export default function EventForm({
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Center the pickers on the event's location if it has one, else on "here".
   const mapCenter = location ? [location.lat, location.lng] : here;
 
   async function handleSubmit(e) {
@@ -62,7 +53,6 @@ export default function EventForm({
     }
     setSubmitting(true);
     try {
-      // datetime-local yields a naive string; append Z to send as UTC.
       await onSubmit({
         kind,
         title,
@@ -82,22 +72,43 @@ export default function EventForm({
   }
 
   return (
-    <form className="card" onSubmit={handleSubmit}>
+    <form
+      className={`card event-form ${kind === "help_request" ? "form-help" : "form-gathering"}`}
+      onSubmit={handleSubmit}
+      style={{ gap: "22px", padding: "30px" }}
+    >
       {error && <div className="alert">{error}</div>}
 
-      <Field label="Type">
+      <div className="field">
+        <span className="field-label">Type</span>
         {lockKind ? (
-          <input
-            value={kind === "help_request" ? "Help request" : "Gathering"}
-            disabled
-          />
+          <div className="pill-tabs">
+            <span className="pill-tab on">
+              {kind === "help_request" ? "Help request" : "Gathering"}
+            </span>
+          </div>
         ) : (
-          <select value={kind} onChange={(e) => setKind(e.target.value)}>
-            <option value="gathering">Gathering — bring people together</option>
-            <option value="help_request">Help request — ask for a hand</option>
-          </select>
+          <div className="pill-tabs">
+            <button
+              type="button"
+              className={kind === "gathering" ? "pill-tab on" : "pill-tab"}
+              onClick={() => setKind("gathering")}
+            >
+              Gathering
+            </button>
+            <button
+              type="button"
+              className={kind === "help_request" ? "pill-tab on" : "pill-tab"}
+              onClick={() => setKind("help_request")}
+            >
+              Help request
+            </button>
+          </div>
         )}
-      </Field>
+        <span className="field-hint">
+          Bring people together, or ask a neighbor for a hand.
+        </span>
+      </div>
 
       <Field label="Title">
         <input value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={200} />
@@ -127,13 +138,17 @@ export default function EventForm({
         />
       </Field>
 
-      <Field label="Location" hint="Click the map to fine-tune the exact spot.">
+      <div className="field">
+        <span className="field-label">Location</span>
         {mapCenter ? (
-          <LocationPicker center={mapCenter} value={location} onPick={setLocation} />
+          <div className="picker-map">
+            <LocationPicker center={mapCenter} value={location} onPick={setLocation} />
+          </div>
         ) : (
           <div className="picker-map centered muted">Locating…</div>
         )}
-      </Field>
+        <span className="field-hint">Click the map to fine-tune the exact spot.</span>
+      </div>
 
       <div className="field-row">
         <Field label="Starts">
@@ -174,25 +189,26 @@ export default function EventForm({
       </div>
 
       {interests && (
-        <Field label="Category" hint="Pick one — it sets the event's map icon.">
+        <div className="field">
+          <span className="field-label">Category</span>
+          <span className="field-hint">Pick one — it sets the event's map icon.</span>
           <div className="chip-grid">
             {interests.map((i) => (
               <button
                 type="button"
                 key={i.id}
                 className={tagId === i.id ? "chip chip-on" : "chip"}
-                // Click the selected one again to clear it (category is optional).
                 onClick={() => setTagId((cur) => (cur === i.id ? "" : i.id))}
               >
                 {tagIcon(i.slug)} {i.name}
               </button>
             ))}
           </div>
-        </Field>
+        </div>
       )}
 
-      <button type="submit" disabled={submitting}>
-        {submitting ? "Saving…" : submitLabel}
+      <button type="submit" disabled={submitting} style={{ alignSelf: "flex-start", padding: "13px 30px", fontSize: "16px" }}>
+        {submitting ? "Saving…" : `${submitLabel} →`}
       </button>
     </form>
   );

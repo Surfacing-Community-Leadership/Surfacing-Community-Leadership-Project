@@ -4,8 +4,6 @@ import { api } from "../api/client.js";
 import { useApi } from "../hooks/useApi.js";
 import CommunityPicker from "../components/CommunityPicker.jsx";
 
-// Optional first-run step, also reachable later as "edit preferences" —
-// it pre-fills whatever the user chose before, so nothing gets lost.
 export default function Onboarding() {
   const navigate = useNavigate();
   const { data, loading, error } = useApi(async () => {
@@ -24,7 +22,6 @@ export default function Onboarding() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
 
-  // Seed the form with current preferences once they arrive.
   useEffect(() => {
     if (!data) return;
     setSelected(new Set(data.myInterests.interest_ids));
@@ -50,9 +47,7 @@ export default function Onboarding() {
         open_to_help: openToHelp,
         show_attending: showAttending,
       });
-      await api.put("/api/profiles/me/interests", {
-        interest_ids: [...selected],
-      });
+      await api.put("/api/profiles/me/interests", { interest_ids: [...selected] });
       navigate("/map", { replace: true });
     } catch (err) {
       setSaveError(err.message);
@@ -60,13 +55,19 @@ export default function Onboarding() {
     }
   }
 
-  if (loading) return <div className="centered muted">Loading…</div>;
-  if (error) return <div className="alert">{error}</div>;
+  if (loading) return <div className="org centered muted">Loading…</div>;
+  if (error)
+    return (
+      <div className="org narrow">
+        <div className="alert">{error}</div>
+      </div>
+    );
 
   return (
-    <div className="narrow">
+    <div className="org narrow">
+      <span className="kicker">Quick setup · optional</span>
       <h1>Welcome to Ours</h1>
-      <p className="muted">
+      <p className="muted" style={{ maxWidth: "52ch", lineHeight: 1.6, margin: "0 0 32px", fontSize: "16px" }}>
         A few optional preferences to shape what you see. You can change these
         anytime from your profile.
       </p>
@@ -78,7 +79,9 @@ export default function Onboarding() {
 
       <section className="card">
         <h2>What are you into?</h2>
-        <p className="muted">Pick any that fit — we'll surface matching events.</p>
+        <p className="muted" style={{ margin: 0 }}>
+          Pick any that fit — we'll surface matching events.
+        </p>
         <div className="chip-grid">
           {data.interests.map((interest) => (
             <button
@@ -96,30 +99,22 @@ export default function Onboarding() {
       <section className="card">
         <h2>How you'd like to show up</h2>
         <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={openToHelp}
-            onChange={(e) => setOpenToHelp(e.target.checked)}
-          />
+          <input type="checkbox" checked={openToHelp} onChange={(e) => setOpenToHelp(e.target.checked)} />
           I'm open to helping neighbors with tasks
         </label>
         <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={showAttending}
-            onChange={(e) => setShowAttending(e.target.checked)}
-          />
+          <input type="checkbox" checked={showAttending} onChange={(e) => setShowAttending(e.target.checked)} />
           Let my connections see what I'm attending
         </label>
       </section>
 
       {saveError && <div className="alert">{saveError}</div>}
-      <div className="row-actions">
+      <div className="row-actions" style={{ justifyContent: "flex-end" }}>
         <button className="secondary" onClick={() => navigate("/map")} disabled={saving}>
           Skip for now
         </button>
         <button onClick={finish} disabled={saving}>
-          {saving ? "Saving…" : "Finish"}
+          {saving ? "Saving…" : "Finish →"}
         </button>
       </div>
     </div>
