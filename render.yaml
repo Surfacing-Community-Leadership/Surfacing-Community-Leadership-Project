@@ -27,10 +27,12 @@ services:
       # HTTPS in production → secure auth cookies.
       - key: COOKIE_SECURE
         value: "true"
-      # Seed the demo neighborhood on first boot (only while the DB is empty;
-      # a no-op once real data exists). Set to "false" to skip.
+      # Seed the demo neighborhood whenever it's missing (a no-op once present,
+      # so it won't wipe imported events on restart). Set "false" to skip.
       - key: SEED_DEMO
         value: "true"
-      # Optional: real-world event import. Leave unset to disable.
-      # - key: TICKETMASTER_API_KEY
-      #   sync: false
+      # Real-world event import. Set the value in the Render dashboard (it's a
+      # secret, so sync:false keeps it out of the repo). Get a free key at
+      # developer.ticketmaster.com. Leave unset to disable importing.
+      - key: TICKETMASTER_API_KEY
+        sync: false
