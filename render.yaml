@@ -27,6 +27,10 @@ services:
       # HTTPS in production → secure auth cookies.
       - key: COOKIE_SECURE
         value: "true"
+      # Seed the demo neighborhood on first boot (only while the DB is empty;
+      # a no-op once real data exists). Set to "false" to skip.
+      - key: SEED_DEMO
+        value: "true"
       # Optional: real-world event import. Leave unset to disable.
       # - key: TICKETMASTER_API_KEY
       #   sync: false

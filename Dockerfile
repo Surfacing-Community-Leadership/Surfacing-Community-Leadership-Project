@@ -28,6 +28,8 @@ COPY --from=frontend /app/frontend/dist /app/frontend/dist
 WORKDIR /app/backend
 EXPOSE 8000
 
-# Apply migrations (enables PostGIS + creates the schema on a fresh DB), then
-# start the server. Render provides $PORT.
-CMD alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
+# Apply migrations (enables PostGIS + creates the schema on a fresh DB),
+# optionally seed the demo neighborhood on first boot (SEED_DEMO=true, empty DB
+# only — best-effort, never blocks startup), then start the server. Render
+# provides $PORT.
+CMD alembic upgrade head && { python scripts/seed_prod.py || true; } && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
