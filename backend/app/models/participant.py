@@ -42,6 +42,12 @@ class EventParticipant(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
     )
     status: Mapped[str] = mapped_column(Text, server_default=text("'invited'"))
+    # Set when the attendee self-confirms they showed up, after the event ends.
+    # The reflection is the anti-farming friction (a minimum word count) and
+    # doubles as a private record for the attendee — it is never shown to
+    # anyone else.
+    attended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reflection: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()")
     )

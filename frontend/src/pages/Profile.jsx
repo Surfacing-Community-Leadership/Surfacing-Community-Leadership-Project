@@ -4,6 +4,7 @@ import { api, avatarUrl } from "../api/client.js";
 import { useApi } from "../hooks/useApi.js";
 import Field from "../components/Field.jsx";
 import CommunityPicker from "../components/CommunityPicker.jsx";
+import TrustBadge from "../components/TrustBadge.jsx";
 
 function initial(name) {
   return (name || "?").trim().charAt(0).toUpperCase();
@@ -103,6 +104,7 @@ export default function Profile() {
     <div className="org narrow">
       <span className="kicker">Yours to tend</span>
       <h1>Your profile</h1>
+      <TrustBadge userId={data.profile.user_id} />
       <form className="card" onSubmit={save} style={{ marginTop: "20px" }}>
         {status && <div className="muted">{status}</div>}
         <Field label="Display name">

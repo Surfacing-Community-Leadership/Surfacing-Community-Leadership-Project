@@ -7,12 +7,26 @@ import { ConfirmDialog, ReportDialog } from "../components/dialogs.jsx";
 import { tagIcon } from "../lib/tagIcons.js";
 
 const ACTIVE = ["invited", "going", "maybe", "attended"];
+// Mirrors the backend: without an end time an event is assumed to run 3 hours.
+const ASSUMED_HOURS = 3;
+const MIN_REFLECTION_WORDS = 20;
 
 function initial(name) {
   return (name || "?").trim().charAt(0).toUpperCase();
 }
 function tint(seed) {
   return (String(seed).charCodeAt(0) || 0) % 2 ? "warm" : "";
+}
+
+function hasEnded(event) {
+  const end = event.ends_at
+    ? new Date(event.ends_at)
+    : new Date(new Date(event.starts_at).getTime() + ASSUMED_HOURS * 3600 * 1000);
+  return end < new Date();
+}
+
+function countWords(text) {
+  return text.trim() ? text.trim().split(/\s+/).length : 0;
 }
 
 export default function EventDetail() {
@@ -44,6 +58,7 @@ export default function EventDetail() {
   const isHost = event.host_id === user.id;
   const mine = participants.find((p) => p.user_id === user.id);
   const canParticipate = isHost || (mine && ACTIVE.includes(mine.status));
+  const ended = hasEnded(event);
 
   async function act(fn) {
     setActionError(null);
@@ -195,6 +210,20 @@ export default function EventDetail() {
             onClose={() => setDialog(null)}
           />
 
+          {/* After the event: confirm you were there, or (for a help request
+              you posted) thank the neighbors who turned up. */}
+          {ended && !isHost && mine?.status !== "attended" && (
+            <AttendanceCard eventId={id} onDone={reload} />
+          )}
+          {ended && mine?.status === "attended" && (
+            <p className="muted attendance-done">
+              ✓ You confirmed you were here — it counts toward your record.
+            </p>
+          )}
+          {ended && isHost && event.kind === "help_request" && (
+            <ThanksPanel eventId={id} participants={participants} />
+          )}
+
           {canParticipate && <Messages eventId={id} />}
         </div>
 
@@ -204,6 +233,144 @@ export default function EventDetail() {
         </aside>
       </div>
     </div>
+  );
+}
+
+// Self-confirming attendance. The reflection is required: it's what keeps the
+// public count honest, and it stays private to whoever wrote it.
+function AttendanceCard({ eventId, onDone }) {
+  const [reflection, setReflection] = useState("");
+  const [error, setError] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const words = countWords(reflection);
+  const short = words < MIN_REFLECTION_WORDS;
+
+  async function submit(e) {
+    e.preventDefault();
+    setError(null);
+    setSaving(true);
+    try {
+      await api.post(`/api/events/${eventId}/attendance`, { reflection });
+      await onDone?.();
+    } catch (err) {
+      setError(err.message);
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="card attendance-card">
+      <h2 style={{ fontSize: "20px", margin: 0 }}>Were you there?</h2>
+      <p className="muted" style={{ margin: 0 }}>
+        Confirm it and jot down how it went. Your note stays private — only the
+        confirmation counts toward your record.
+      </p>
+      {error && <div className="alert">{error}</div>}
+      <form onSubmit={submit} style={{ display: "grid", gap: "10px" }}>
+        <textarea
+          value={reflection}
+          onChange={(e) => setReflection(e.target.value)}
+          rows={3}
+          maxLength={2000}
+          placeholder="Who did you meet? What would you do differently next time?"
+          aria-label="Your reflection"
+        />
+        <div className="attendance-foot">
+          <span className={short ? "muted" : "words-ok"}>
+            {words} / {MIN_REFLECTION_WORDS} words
+          </span>
+          <button type="submit" disabled={short || saving}>
+            {saving ? "Saving…" : "I was there"}
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
+// Only the neighbor who asked for help can confirm who actually helped, which
+// is what makes the "helped" count on a profile worth anything.
+function ThanksPanel({ eventId, participants }) {
+  const { data: thanked, reload } = useApi(
+    () => api.get(`/api/events/${eventId}/thanks`),
+    [eventId],
+  );
+  const [openFor, setOpenFor] = useState(null);
+  const [note, setNote] = useState("");
+  const [error, setError] = useState(null);
+
+  const helpers = participants.filter((p) => ACTIVE.includes(p.status));
+  if (helpers.length === 0) return null;
+
+  async function send(helperId) {
+    setError(null);
+    try {
+      await api.post(`/api/events/${eventId}/thanks`, {
+        helper_id: helperId,
+        note: note.trim() || null,
+      });
+      setOpenFor(null);
+      setNote("");
+      await reload();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  return (
+    <section className="card">
+      <h2 style={{ fontSize: "20px", margin: 0 }}>Who helped you out?</h2>
+      <p className="muted" style={{ margin: 0 }}>
+        Saying thanks adds to their record — and sends them your note.
+      </p>
+      {error && <div className="alert">{error}</div>}
+      <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "12px" }}>
+        {helpers.map((p) => {
+          const already = thanked?.includes(p.user_id);
+          return (
+            <li key={p.user_id} style={{ display: "grid", gap: "8px" }}>
+              <div className="invite-row">
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "10px" }}>
+                  <span className={`avatar-initial sm ${tint(p.display_name)}`}>
+                    {initial(p.display_name)}
+                  </span>
+                  {p.display_name}
+                </span>
+                {already ? (
+                  <span className="muted">✓ Thanked</span>
+                ) : (
+                  <button
+                    className="secondary"
+                    style={{ fontSize: "12px", padding: "6px 14px" }}
+                    onClick={() => setOpenFor(openFor === p.user_id ? null : p.user_id)}
+                  >
+                    Say thanks
+                  </button>
+                )}
+              </div>
+              {openFor === p.user_id && (
+                <div style={{ display: "grid", gap: "8px" }}>
+                  <textarea
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    rows={2}
+                    maxLength={500}
+                    placeholder={`A quick note to ${p.display_name} (optional)`}
+                    aria-label="Thank-you note"
+                  />
+                  <div className="row-actions" style={{ marginTop: 0 }}>
+                    <button onClick={() => send(p.user_id)}>Send thanks</button>
+                    <button className="link-button" onClick={() => setOpenFor(null)}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 

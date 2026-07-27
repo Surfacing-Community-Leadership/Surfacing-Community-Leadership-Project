@@ -1,11 +1,20 @@
 import uuid
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import and_, func, or_, select
 
 from app.core.notifications import notify
-from app.models import Connection, Event, EventParticipant, Notification, Profile, User
+from app.models import (
+    Connection,
+    Event,
+    EventParticipant,
+    HelpThanks,
+    Notification,
+    Profile,
+    User,
+)
 from app.routers.deps import (
     ACTIVE_PARTICIPANT_STATUSES,
     CONFIRMED_PARTICIPANT_STATUSES,
@@ -13,16 +22,21 @@ from app.routers.deps import (
     CurrentUser,
     blocked_counterparts,
     blocked_either_way,
+    event_has_ended,
     get_event_or_404,
     get_participation,
     require_event_view,
 )
 from app.schemas.participant import (
+    AttendancePayload,
+    AttendanceRead,
     InvitePayload,
     InviteRead,
     ParticipantRead,
     RsvpPayload,
     RsvpRead,
+    ThanksPayload,
+    ThanksRead,
 )
 
 router = APIRouter(prefix="/api/events/{event_id}", tags=["participation"])
@@ -208,4 +222,129 @@ async def invite_user(event_id: uuid.UUID, payload: InvitePayload, db: DB, user:
     await db.commit()
     return InviteRead(
         event_id=event.id, user_id=payload.user_id, status="invited", inviter_id=user.id
+    )
+
+
+@router.post("/attendance", response_model=AttendanceRead, status_code=201)
+async def confirm_attendance(
+    event_id: uuid.UUID, payload: AttendancePayload, db: DB, user: CurrentUser
+):
+    """Self-confirm you were there, with a short reflection.
+
+    Host confirmation doesn't scale past a small gathering, so attendance is
+    self-reported — but writing a reflection (validated for length in the
+    schema) makes bulk-farming the public count cost real effort. It also works
+    for imported events, which have no host to vouch for anyone.
+    """
+    event = await get_event_or_404(db, event_id)
+    await require_event_view(db, event, user)
+
+    if not event_has_ended(event, datetime.now(timezone.utc)):
+        raise HTTPException(
+            status_code=409, detail="You can confirm this once the event is over"
+        )
+    if event.status == "cancelled":
+        raise HTTPException(status_code=409, detail="This event was cancelled")
+    if event.host_id == user.id:
+        raise HTTPException(
+            status_code=409, detail="Hosting an event already counts — no need to confirm"
+        )
+
+    participation = await get_participation(db, event.id, user.id)
+    if participation is not None and participation.status == "attended":
+        raise HTTPException(status_code=409, detail="You already confirmed this one")
+
+    if participation is None:
+        # No RSVP needed — you may have found the event on the map and just gone.
+        participation = EventParticipant(event_id=event.id, user_id=user.id)
+        db.add(participation)
+    participation.status = "attended"
+    participation.attended_at = datetime.now(timezone.utc)
+    participation.reflection = payload.reflection
+
+    await db.commit()
+    return AttendanceRead(
+        event_id=event.id,
+        user_id=user.id,
+        status="attended",
+        reflection=payload.reflection,
+    )
+
+
+@router.get("/thanks", response_model=list[uuid.UUID])
+async def list_thanked_helpers(event_id: uuid.UUID, db: DB, user: CurrentUser):
+    """Helper ids already thanked for this request, so the page doesn't offer
+    the button twice after a reload."""
+    event = await get_event_or_404(db, event_id)
+    await require_event_view(db, event, user)
+    return list(
+        (
+            await db.scalars(
+                select(HelpThanks.helper_id).where(HelpThanks.event_id == event.id)
+            )
+        ).all()
+    )
+
+
+@router.post("/thanks", response_model=ThanksRead, status_code=201)
+async def say_thanks(
+    event_id: uuid.UUID, payload: ThanksPayload, db: DB, user: CurrentUser
+):
+    """Confirm that a neighbor helped with your request, optionally with a note.
+
+    Only the person who asked can do this, which is what makes the public
+    "helped" count trustworthy — it can never be self-declared.
+    """
+    event = await get_event_or_404(db, event_id)
+
+    if event.kind != "help_request":
+        raise HTTPException(
+            status_code=409, detail="Thanks are for help requests"
+        )
+    if event.host_id != user.id:
+        raise HTTPException(
+            status_code=403, detail="Only the neighbor who asked can say thanks"
+        )
+    if not event_has_ended(event, datetime.now(timezone.utc)):
+        raise HTTPException(
+            status_code=409, detail="You can say thanks once the request is done"
+        )
+    if payload.helper_id == user.id:
+        raise HTTPException(status_code=409, detail="You cannot thank yourself")
+
+    helper_participation = await get_participation(db, event.id, payload.helper_id)
+    if (
+        helper_participation is None
+        or helper_participation.status not in ACTIVE_PARTICIPANT_STATUSES
+    ):
+        raise HTTPException(
+            status_code=404, detail="That neighbor wasn't part of this request"
+        )
+
+    existing = await db.scalar(
+        select(HelpThanks.id).where(
+            HelpThanks.event_id == event.id, HelpThanks.helper_id == payload.helper_id
+        )
+    )
+    if existing is not None:
+        raise HTTPException(status_code=409, detail="You already thanked this neighbor")
+
+    db.add(
+        HelpThanks(
+            event_id=event.id,
+            helper_id=payload.helper_id,
+            recipient_id=user.id,
+            note=payload.note,
+        )
+    )
+    await notify(
+        db,
+        user_id=payload.helper_id,
+        type="help_thanks",
+        actor_id=user.id,
+        event_id=event.id,
+    )
+    await db.commit()
+    return ThanksRead(
+        event_id=event.id, helper_id=payload.helper_id, note=payload.note
     )

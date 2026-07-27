@@ -39,3 +39,14 @@ class ProfileUpdate(BaseModel):
 
 class InterestIds(BaseModel):
     interest_ids: list[uuid.UUID]
+
+
+class TrustRecord(BaseModel):
+    """A neighbor's public track record — plain verifiable counts plus the tier
+    they add up to. Help *received* is deliberately absent."""
+
+    verified: bool
+    hosted: int
+    attended: int
+    helped: int
+    tier: str
