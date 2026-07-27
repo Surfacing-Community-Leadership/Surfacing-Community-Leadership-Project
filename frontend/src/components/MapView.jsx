@@ -4,6 +4,7 @@ import {
   TileLayer,
   Marker,
   Tooltip,
+  ZoomControl,
   useMap,
   useMapEvents,
 } from "react-leaflet";
@@ -73,7 +74,18 @@ export default function MapView({ center, events, onReady, onMoveEnd }) {
   const navigate = useNavigate();
 
   return (
-    <MapContainer center={center} zoom={14} className="map" scrollWheelZoom>
+    <MapContainer
+      center={center}
+      zoom={14}
+      className="map"
+      scrollWheelZoom
+      zoomControl={false}
+    >
+      {/* Top-right so it clears the floating list panel on the left. */}
+      <ZoomControl position="topright" />
+      {/* Standard OpenStreetMap tiles — the familiar, clear base. A light warm
+          tint (see .leaflet-tile in styles.css) nudges it toward the app's
+          earthy palette without muddying the detail. */}
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

@@ -11,9 +11,12 @@ export default function CreateEvent() {
   }
 
   return (
-    <div className="narrow">
-      <h1>Create</h1>
-      <EventForm submitLabel="Create" onSubmit={create} enforceFutureStart />
+    <div className="org narrow">
+      <span className="kicker">Start something</span>
+      <h1>Host an event</h1>
+      <div style={{ marginTop: "20px" }}>
+        <EventForm submitLabel="Create event" onSubmit={create} enforceFutureStart />
+      </div>
     </div>
   );
 }

@@ -63,23 +63,24 @@ export default function MapHome() {
   }
 
   return (
-    <div className="map-layout">
-      <div className="map-main">
-        <MapView
-          center={center}
-          events={events}
-          onReady={(map) => {
-            mapRef.current = map;
-          }}
-        />
-        <button className="search-area" onClick={searchVisibleArea} disabled={loading}>
-          {loading ? "Searching…" : "Search this area"}
-        </button>
-      </div>
+    <div className="map-immersive">
+      <MapView
+        center={center}
+        events={events}
+        onReady={(map) => {
+          mapRef.current = map;
+        }}
+      />
+      <button className="search-area" onClick={searchVisibleArea} disabled={loading}>
+        {loading ? "Searching…" : "Search this area"}
+      </button>
 
-      <aside className="map-sidebar">
+      <aside className="map-panel">
         <div className="sidebar-header">
-          <h2>Nearby</h2>
+          <span className="eyebrow">Nearby</span>
+          <span className="sidebar-count">
+            {events.length} {events.length === 1 ? "spot" : "spots"}
+          </span>
         </div>
         <div className="map-filters">
           <select value={kind} onChange={(e) => setKind(e.target.value)}>
@@ -98,33 +99,35 @@ export default function MapHome() {
           </select>
         </div>
 
-        {error && <div className="alert">{error}</div>}
-        {!loading && events.length === 0 && (
-          <p className="muted">
-            {category === "mine"
-              ? "Nothing here matches your interests yet. Try widening to All categories, or "
-              : "Nothing here yet. Pan the map and search again, or "}
-            <Link to="/events/new">create something</Link>.
-          </p>
-        )}
+        <div className="map-panel-scroll">
+          {error && <div className="alert">{error}</div>}
+          {!loading && events.length === 0 && (
+            <p className="map-empty">
+              {category === "mine"
+                ? "Nothing here matches your interests yet. Try widening to All categories, or "
+                : "Nothing here yet. Pan the map and search again, or "}
+              <Link to="/events/new">create something</Link>.
+            </p>
+          )}
 
-        <ul className="event-list">
-          {events.map((ev) => (
-            <li key={ev.id}>
-              <Link to={`/events/${ev.id}`} className="event-list-item">
-                <span className={`dot dot-${ev.kind}`} />
-                <span className="event-list-body">
-                  <strong>{ev.title}</strong>
-                  <span className="muted">
-                    {ev.source === "imported" ? "Around town ↗" : ev.kind === "help_request" ? "Help request" : "Gathering"}
-                    {ev.tag_name && ` · ${ev.tag_name}`}
-                    {ev.distance_m != null && ` · ${formatDistance(ev.distance_m)}`}
+          <ul className="event-list">
+            {events.map((ev) => (
+              <li key={ev.id}>
+                <Link to={`/events/${ev.id}`} className="event-list-item">
+                  <span className={`dot dot-${ev.kind}`} />
+                  <span className="event-list-body">
+                    <strong>{ev.title}</strong>
+                    <span className="muted">
+                      {ev.source === "imported" ? "Around town ↗" : ev.kind === "help_request" ? "Help request" : "Gathering"}
+                      {ev.tag_name && ` · ${ev.tag_name}`}
+                      {ev.distance_m != null && ` · ${formatDistance(ev.distance_m)}`}
+                    </span>
                   </span>
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
       </aside>
     </div>
   );
