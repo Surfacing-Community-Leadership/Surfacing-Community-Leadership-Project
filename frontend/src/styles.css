@@ -258,6 +258,39 @@ p {
   border-radius: 999px;
 }
 
+/* ---- Create button ------------------------------------------------------
+   Creating something is an action, not a destination, so it floats instead of
+   taking a tab. z-index sits above the map's panel (550) but below the nav
+   rail (1100), so the bar always wins a fight over the same pixels. */
+.fab {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 1050;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.85rem 1.15rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  box-shadow: 0 10px 26px rgba(43, 35, 24, 0.42);
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+.fab:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 32px rgba(43, 35, 24, 0.5);
+  color: var(--on-accent);
+}
+.fab svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2.4;
+}
+
 /* ---- Mobile top bar (hidden on desktop) --------------------------------- */
 .mtop {
   display: none;
@@ -1454,6 +1487,23 @@ button.danger:hover {
     width: 26px;
     height: 3px;
     border-radius: 0 0 3px 3px;
+  }
+
+  /* Clear the tab bar, and shrink to a circle so it doesn't crowd a phone. */
+  .fab {
+    right: 16px;
+    bottom: calc(var(--bar-h) + 16px);
+    padding: 0;
+    width: 54px;
+    height: 54px;
+    justify-content: center;
+  }
+  .fab-label {
+    display: none;
+  }
+  /* On the map the list sheet owns the bottom of the screen, so lift above it. */
+  .fab-map {
+    bottom: calc(var(--bar-h) + 44vh + 22px);
   }
 
   /* Immersive map fills the space between the two bars. */

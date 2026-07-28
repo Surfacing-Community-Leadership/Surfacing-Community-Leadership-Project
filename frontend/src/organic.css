@@ -968,6 +968,225 @@
   --color-accent-800: #643312;
 }
 
+/* ---- Notice board -------------------------------------------------------
+   Deliberately flatter and quieter than the event cards: a board is something
+   you skim, not a feed that competes for attention. No counts, no ranking, no
+   emphasis on recency — just the category, the words, and how long it has left. */
+.org .board-intro {
+  max-width: 60ch;
+  margin: -8px 0 24px;
+}
+.org .board-blocked {
+  background: var(--color-accent-100);
+  color: var(--color-accent-800);
+  border-radius: 18px;
+  padding: 14px 18px;
+  font-size: 14px;
+  margin-bottom: 22px;
+}
+.org .board-filters {
+  margin-bottom: 22px;
+}
+.org .board-empty {
+  padding: 28px 0;
+}
+.org .allowance {
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.org .notice-card {
+  gap: 10px;
+  padding: 22px 24px;
+  /* A hairline in the category's colour does the work a coloured background
+     would, without turning the grid into a set of traffic lights. */
+  border-left: 4px solid var(--nc-accent, var(--color-accent-200));
+  border-radius: 22px;
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.16s ease;
+}
+.org .notice-card:hover {
+  transform: translateY(-2px);
+  color: inherit;
+}
+.org .notice-card h3 {
+  margin: 0;
+}
+.org .notice-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.org .notice-body {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--color-neutral-800);
+  /* Three lines on the board; the whole thing on the notice's own page. So a
+     wordy notice can't shout down a short one. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.org .notice-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 12px;
+  color: var(--color-neutral-700);
+}
+.org .notice-meta a {
+  color: inherit;
+}
+.org .notice-verified {
+  color: var(--color-accent-2-700);
+  font-weight: 700;
+}
+.org .notice-replies {
+  font-weight: 700;
+  color: var(--color-accent-700);
+}
+
+/* Category accents. Giveaways and offers lean sage (something is on offer);
+   asks and losses lean terracotta (somebody needs a hand); the two org-only
+   kinds take the warm ochre that volunteer work already uses. */
+.org .nc-giveaway,
+.org .nc-offer_help {
+  --nc-accent: var(--color-accent-2);
+}
+.org .nc-lost_found,
+.org .nc-recommendation {
+  --nc-accent: var(--color-accent);
+}
+.org .nc-announcement,
+.org .nc-service_change {
+  --nc-accent: #a8762b;
+}
+.org .tag-giveaway,
+.org .tag-offer_help {
+  background: var(--color-accent-2-100);
+  color: var(--color-accent-2-800);
+}
+.org .tag-lost_found,
+.org .tag-recommendation {
+  background: var(--color-accent-100);
+  color: var(--color-accent-800);
+}
+.org .tag-announcement,
+.org .tag-service_change {
+  background: #f5e6c8;
+  color: #6b4a15;
+}
+
+/* The compose form, tinted by category the same way the event form is. */
+.org .notice-form {
+  background: color-mix(in srgb, var(--color-accent) 7%, var(--color-surface));
+  border-radius: 30px;
+  padding: 26px 28px;
+  margin-bottom: 26px;
+}
+.org .notice-form h2 {
+  margin-top: 0;
+}
+.org .notice-form.form-giveaway,
+.org .notice-form.form-offer_help {
+  --color-accent: var(--color-accent-2);
+  --color-accent-600: var(--color-accent-2-600);
+  --color-accent-700: var(--color-accent-2-700);
+  --color-accent-100: var(--color-accent-2-100);
+  --color-accent-200: var(--color-accent-2-200);
+  --color-accent-800: var(--color-accent-2-800);
+}
+.org .notice-form.form-announcement,
+.org .notice-form.form-service_change {
+  --color-accent: #a8762b;
+  --color-accent-600: #8a5f1f;
+  --color-accent-700: #6b4a15;
+  --color-accent-100: #f8eed8;
+  --color-accent-200: #f0dcb4;
+  --color-accent-800: #55390f;
+}
+.org .notice-form .alert {
+  --color-accent: #c67139;
+  --color-accent-100: #fff2eb;
+  --color-accent-800: #643312;
+}
+
+/* One notice's own page. */
+.org .notice-detail {
+  background: var(--color-surface);
+  border-left: 4px solid var(--nc-accent, var(--color-accent-200));
+  border-radius: 26px;
+  padding: 26px 28px;
+  margin: 16px 0 26px;
+}
+.org .notice-detail h1 {
+  margin: 12px 0;
+}
+.org .notice-detail-body {
+  white-space: pre-wrap;
+  line-height: 1.65;
+  margin: 0 0 18px;
+}
+.org .notice-owner-bar {
+  border-top: 1px solid var(--color-divider);
+  padding-top: 20px;
+  margin-bottom: 28px;
+}
+.org .notice-replies-head {
+  margin-bottom: 4px;
+}
+.org .notice-reply {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 18px 20px;
+}
+.org .notice-reply p {
+  margin: 0;
+}
+.org .notice-reply-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.org .notice-reply-form {
+  background: var(--color-surface);
+  border-radius: 26px;
+  padding: 24px 26px;
+}
+.org .notice-reply-form h2 {
+  margin-top: 0;
+}
+.org .notice-reply-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 12px;
+}
+.org .notice-sent {
+  background: var(--color-accent-2-100);
+  color: var(--color-accent-2-800);
+  border-radius: 14px;
+  padding: 10px 14px;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+.org .notice-closed {
+  background: var(--color-surface);
+  border-radius: 26px;
+  padding: 24px 26px;
+}
+.org .notice-report {
+  margin-top: 22px;
+  font-size: 13px;
+}
+
 /* ---- Auth split-screen (Login / Register) ------------------------------ */
 .auth-split {
   min-height: 100vh;

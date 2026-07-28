@@ -11,6 +11,8 @@ import EventDetail from "./pages/EventDetail.jsx";
 import CreateEvent from "./pages/CreateEvent.jsx";
 import EditEvent from "./pages/EditEvent.jsx";
 import MyEvents from "./pages/MyEvents.jsx";
+import Board from "./pages/Board.jsx";
+import NoticeDetail from "./pages/NoticeDetail.jsx";
 import Profile from "./pages/Profile.jsx";
 import PublicProfile from "./pages/PublicProfile.jsx";
 import Connections from "./pages/Connections.jsx";
@@ -39,6 +41,8 @@ export default function App() {
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/events/new" element={<CreateEvent />} />
         <Route path="/my-events" element={<MyEvents />} />
+        <Route path="/board" element={<Board />} />
+        <Route path="/board/:noticeId" element={<NoticeDetail />} />
         <Route path="/events/:id" element={<EventDetail />} />
         <Route path="/events/:id/edit" element={<EditEvent />} />
         <Route path="/profile" element={<Profile />} />

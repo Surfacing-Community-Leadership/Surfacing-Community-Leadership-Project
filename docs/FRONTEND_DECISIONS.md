@@ -119,10 +119,37 @@ expose something the UI ideally wants; I worked around them and noted each.
   `api.upload`); `avatarUrl()` in `client.js` resolves uploaded keys to
   `/media/...` URLs, falling back to emoji/text for legacy values.
 
+## Revisions — 2026-07-28 (the notice board)
+
+- **`Create` moved from the nav rail to a floating button** (`.fab` in
+  `styles.css`, `CreateButton` in `Layout.jsx`), freeing the fifth tab for
+  `Board`. Six tabs don't fit a phone-width bar, and creating is an action
+  rather than a destination. The button hides itself on `/events/new`,
+  `/onboarding` and any `…/edit` route, shrinks to a circle on mobile, and
+  lifts above the map's list sheet via `.fab-map` — verified by measuring the
+  two rects rather than eyeballing it.
+- **The board is styled deliberately quieter than the event cards.** A 4px
+  category-coloured left rule instead of a coloured background, bodies clamped
+  to three lines so a wordy notice can't shout down a short one, and no counts
+  or ranking. Giveaways and offers lean sage (something is available), asks and
+  losses lean terracotta (someone needs a hand), org-only categories take the
+  ochre volunteer work already uses.
+- **The compose form tints by category**, reusing the pattern the event form
+  established (`.notice-form.form-giveaway` etc. override the accent ramp).
+- **`Board.jsx` renders the neighborhood picker inline** when the account has no
+  `community_id`, rather than erroring or bouncing to onboarding: the board is
+  scoped to a neighborhood, so there is genuinely nothing to show until one is
+  chosen. `GET /api/notices/meta` reports *why* posting is unavailable and the
+  UI turns that into a prompt instead of a dead button.
+- **`NoticeDetail.jsx` is two screens on one route** — the author sees their
+  private replies plus "mark it sorted" / "take it down"; everyone else sees a
+  single reply box, a character counter, and no hint of who else replied.
+
 ## Not done (deferred)
 
-- No automated frontend tests (the backend now has a 24-test pytest suite;
-  UI flows verified manually through the Vite proxy).
+- No automated frontend tests (the backend now has a 200-test pytest suite;
+  UI flows verified through the Vite proxy — the board was checked at 1440px
+  and 390px, as author and as visitor, with horizontal overflow measured at 0).
 - No optimistic UI; every mutation waits for the server then reloads.
 - No pagination controls in the UI (backend supports limit/offset; defaults
   cover MVP volumes).

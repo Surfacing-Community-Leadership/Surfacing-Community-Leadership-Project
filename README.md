@@ -42,9 +42,23 @@ If we succeed, people need the app less and less over time. That's the point.
   more.
 - **Safety** — decline requests, block users, and report bad behavior.
 
-Planned stretch features include verified organization accounts, a low-noise
-notice board, and an AI layer that guides event creation and surfaces
-relevant local happenings.
+## Beyond the MVP (built)
+
+- **Trust records** — public, verifiable counts of what someone has hosted,
+  attended and helped with, so neighbors can judge for themselves.
+- **Verified organization accounts** — libraries, schools, parks and the like,
+  auto-verified on domains that can't be casually registered.
+- **Volunteer work** — the organization counterpart to a personal help request.
+- **Following organizations** — notifications when one you follow posts.
+- **The notice board** — a per-neighborhood board for things worth knowing
+  that aren't invitations. Deliberately low-noise: notices expire, each person
+  gets three at a time, replies go privately to whoever posted, and there are
+  no comment threads, vote counts or ranking anywhere in it. There is also no
+  crime-and-safety category, which is a design decision rather than an
+  oversight — see `backend/app/core/notices.py`.
+
+Still planned: an AI layer that guides event creation and surfaces relevant
+local happenings.
 
 ## Tech stack
 

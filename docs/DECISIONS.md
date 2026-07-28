@@ -161,8 +161,65 @@ from the written spec; everything else fills a gap the spec left open.
   first, offers "Search a wider area" (3 → 8 → 20 km) and "Choose later", and
   materializes the pick (POST) before handing the UUID to the profile PATCH.
 
+## Revisions — 2026-07-28 (the notice board)
+
+- **Notices are their own table, not a fourth `Event.kind`.** The events table
+  advertises "one table serves both", but the seams don't fit: `events.starts_at`
+  and `events.location` are both NOT NULL and plenty of real notices have
+  neither ("water main work on 5th all week"). Sharing the table would also
+  inherit RSVPs, capacity, `status`, event-scoped messaging and the trust
+  tallies — `isHelpKind` and the hosted-count ladder would each need an "unless
+  it's a notice" carve-out. `notices` reuses the *patterns* instead (the
+  `public`/`community` scoping idea, `blocked_counterparts`, the notifications
+  table, the report path) without the baggage.
+- **The board is scoped by `community_id`, not by radius, and never appears on
+  the map.** A board is a *place*: everyone in a neighborhood reads the same
+  one, rather than each person seeing a personalized slice. This fell out of the
+  product decision to keep notices off the map, and it removed PostGIS from the
+  feature entirely — no geography column, no GIST index, no interaction with the
+  tile-import ledger. A free-text `place_hint` ("the bench by the playground")
+  covers location, and reads better to a neighbor than a pin would. Adding a
+  nullable location later is a one-column migration if that changes.
+- **Three structural noise controls, chosen over moderation** because there is
+  nobody on staff to moderate (`app/core/notices.py`): every notice carries an
+  `expires_at` so the board sweeps itself; `MAX_LIVE_NOTICES = 3` per author,
+  because a corkboard has finite space and the scarcity is the feature; and the
+  categories are a closed CHECK-constrained list rather than free text.
+- **No comment threads anywhere on the board.** Open comments are the specific
+  mechanism that turns neighborhood feeds into argument venues (the Nextdoor
+  research is unambiguous), so a reply is a single private line to the poster,
+  delivered as a notification. `UNIQUE (notice_id, author_id)` means one reply
+  per neighbor — sending again edits it and deliberately does *not* re-notify,
+  so editing can't become an unlimited pinger. `GET /replies` is author-only,
+  and `reply_count` is nulled out for everyone else so the board doesn't leak
+  who is interested in what.
+- **No engagement metrics.** No likes, votes, ranking or recency emphasis. The
+  trust record earned the right to show counts because they're verifiable; a
+  board hasn't.
+- **No crime-and-safety category, on purpose.** Studies of Nextdoor find its
+  users perceive more crime regardless of whether crime actually rose, which is
+  the opposite of getting neighbors comfortable with each other. Reports and
+  blocks handle real problems between people. `test_there_is_no_crime_or_safety_category`
+  asserts the absence so nobody re-adds one by reflex.
+- **Posting requires a confirmed email**, reusing `email_confirmed_at` as the
+  board's only spam gate: it costs an attacker a working inbox per account.
+- **Organizations get two extra categories** (`announcement`, `service_change`)
+  because those carry an institution's authority; they keep the neighborly ones
+  too, since a library giving away chairs is still a giveaway.
+- **`notifications` gained a nullable `notice_id`** (it only referenced events
+  before). CASCADE rather than the `event_id` column's SET NULL: an orphaned
+  event notification still reads as "an event", but "someone replied to a
+  notice" with no notice to open is a dead end.
+- **`Create` left the nav for a floating button.** Creating is an action, not a
+  destination, and moving it freed the fifth tab slot for the board instead of
+  cramming six tabs into a phone-width bar. The button lifts above the map's
+  list sheet on mobile (`.fab-map`) and sits below the rail's z-index so the
+  nav always wins a fight over the same pixels.
+
 ## Deferred (known gaps to discuss)
 
 - Rate limiting is in the stack but still not wired.
 - Expired access-token rows need a periodic cleanup task.
 - Avatar storage is local disk — swap for object storage before deploying.
+- Expired notices are filtered out of every query but never deleted. Harmless
+  at this scale; a periodic sweep belongs with the access-token cleanup above.
