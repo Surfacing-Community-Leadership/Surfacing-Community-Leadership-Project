@@ -14,6 +14,7 @@ from app.core.auth import (
     get_user_manager,
 )
 from app.core.config import settings
+from app.core.orgs import should_auto_verify
 from app.models import Profile
 from app.routers.deps import DB, CurrentUser
 from app.schemas.auth import LoginRequest, RegisterRequest, UserCreate, UserRead
@@ -41,7 +42,30 @@ async def register(
     # emoji label when it isn't an uploaded file path, so a neutral emoji is a
     # sensible placeholder until they upload a photo (NOT the literal "default",
     # which would render as that word).
-    db.add(Profile(user_id=user.id, display_name=payload.display_name, avatar_key="🙂"))
+    is_org = payload.account_type == "organization"
+    db.add(
+        Profile(
+            user_id=user.id,
+            display_name=payload.display_name,
+            avatar_key="🏛️" if is_org else "🙂",
+            account_type=payload.account_type,
+            org_category=payload.org_category,
+            org_website=payload.org_website,
+            org_phone=payload.org_phone,
+            org_address=payload.org_address,
+            org_contact_name=payload.org_contact_name,
+            org_contact_role=payload.org_contact_role,
+        )
+    )
+
+    # The ✓ badge is only granted here when the signup email sits on a domain
+    # that can't be casually registered (.gov/.edu/…). Everyone else — including
+    # a library on a .org — starts unverified and an admin grants it after
+    # checking org_website. See app/core/orgs.py.
+    if should_auto_verify(payload.account_type, payload.email):
+        user.is_verified = True
+        db.add(user)
+
     await db.commit()
     return user
 

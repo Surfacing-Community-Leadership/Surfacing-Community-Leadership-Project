@@ -685,6 +685,42 @@
   color: color-mix(in srgb, var(--color-text) 55%, transparent);
 }
 
+/* ---- Organization accounts --------------------------------------------- */
+.org .org-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.org .org-line a {
+  font-size: 13px;
+}
+.org .org-unverified {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 11px;
+  border-radius: 999px;
+  background: var(--color-neutral-200);
+  color: var(--color-neutral-700);
+}
+.org .org-contact {
+  font-size: 13px;
+}
+/* The extra fields an organization fills in at signup, set apart from the
+   ordinary account fields above them. */
+.org-block {
+  border-top: 1px solid var(--color-divider);
+  margin: 4px 0 20px;
+  padding-top: 16px;
+}
+.org-block-note {
+  font-size: 12.5px;
+  line-height: 1.55;
+  margin: 0 0 16px;
+  color: color-mix(in srgb, var(--color-text) 62%, transparent);
+}
+
 /* ---- Post-event attendance confirmation -------------------------------- */
 .org .attendance-card {
   background: var(--color-accent-2-100);

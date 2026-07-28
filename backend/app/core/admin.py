@@ -54,8 +54,20 @@ class UserAdmin(ModelView, model=User):
 class ProfileAdmin(ModelView, model=Profile):
     name_plural = "Profiles"
     icon = "fa-solid fa-id-card"
-    column_list = [Profile.display_name, Profile.user_id, Profile.community_id]
-    column_searchable_list = [Profile.display_name]
+    # Org columns first: this list is the review queue for verification
+    # requests. Check org_website, then grant the badge on the Users view by
+    # ticking is_verified.
+    column_list = [
+        Profile.display_name,
+        Profile.account_type,
+        Profile.org_category,
+        Profile.org_website,
+        Profile.org_contact_name,
+        Profile.org_contact_role,
+        Profile.user_id,
+        Profile.community_id,
+    ]
+    column_searchable_list = [Profile.display_name, Profile.account_type]
     form_excluded_columns = [Profile.created_at, Profile.updated_at]
     can_create = False
 
