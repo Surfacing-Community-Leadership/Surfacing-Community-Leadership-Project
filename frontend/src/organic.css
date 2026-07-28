@@ -690,6 +690,17 @@
   color: color-mix(in srgb, var(--color-text) 55%, transparent);
 }
 
+/* ---- Following organizations ------------------------------------------- */
+.org .follow-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.org .follow-count {
+  font-size: 13px;
+}
+
 /* ---- Third-party sign-in ------------------------------------------------ */
 .auth-divider {
   display: flex;

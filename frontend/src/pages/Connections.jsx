@@ -3,6 +3,7 @@ import { api } from "../api/client.js";
 import { useApi } from "../hooks/useApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { useState } from "react";
+import FollowButton from "../components/FollowButton.jsx";
 
 function initial(name) {
   return (name || "?").trim().charAt(0).toUpperCase();
@@ -35,6 +36,7 @@ export default function Connections() {
   });
 
   const [actionError, setActionError] = useState(null);
+  const [tab, setTab] = useState("people"); // "people" | "orgs"
 
   if (loading) return <div className="org centered muted">Loading…</div>;
   if (error)
@@ -59,13 +61,30 @@ export default function Connections() {
 
   return (
     <div className="org wide">
-      <span className="kicker">People you've met</span>
-      <h1>Connections</h1>
+      <span className="kicker">Your neighborhood</span>
+      <h1>People &amp; organizations</h1>
+
+      <div className="pill-tabs" style={{ marginBottom: "24px" }}>
+        <button
+          className={tab === "people" ? "pill-tab on" : "pill-tab"}
+          onClick={() => setTab("people")}
+        >
+          Neighbors
+        </button>
+        <button
+          className={tab === "orgs" ? "pill-tab on" : "pill-tab"}
+          onClick={() => setTab("orgs")}
+        >
+          Organizations
+        </button>
+      </div>
       {actionError && <div className="alert" style={{ marginTop: "16px" }}>{actionError}</div>}
 
-      <PeopleSearch onConnected={reload} />
+      {tab === "orgs" && <OrganizationsPanel />}
 
-      {data.requests.length > 0 && (
+      {tab === "people" && <PeopleSearch onConnected={reload} />}
+
+      {tab === "people" && data.requests.length > 0 && (
         <section style={{ marginBottom: "32px" }}>
           <h2 style={{ fontSize: "18px" }}>Pending requests</h2>
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -106,6 +125,7 @@ export default function Connections() {
         </section>
       )}
 
+      {tab === "people" && (
       <section>
         <h2 style={{ fontSize: "18px" }}>Your connections</h2>
         {data.friends.length === 0 ? (
@@ -135,6 +155,93 @@ export default function Connections() {
           </div>
         )}
       </section>
+      )}
+    </div>
+  );
+}
+
+// Local institutions you can follow. Following one means hearing about what it
+// posts — see the org_event notification.
+function OrganizationsPanel() {
+  const { data, error, loading, reload } = useApi(() =>
+    api.get("/api/organizations"),
+  );
+
+  if (loading) return <p className="muted">Loading organizations…</p>;
+  if (error) return <div className="alert">{error}</div>;
+  if (data.length === 0) {
+    return (
+      <p className="muted">
+        No organizations yet. Libraries, schools, parks departments and
+        nonprofits can create an account from the sign-up page.
+      </p>
+    );
+  }
+
+  const following = data.filter((o) => o.following);
+  const rest = data.filter((o) => !o.following);
+
+  return (
+    <>
+      {following.length > 0 && (
+        <section style={{ marginBottom: "32px" }}>
+          <h2 style={{ fontSize: "18px" }}>You follow</h2>
+          <div className="card-grid">
+            {following.map((org) => (
+              <OrgCard key={org.user_id} org={org} onChange={reload} />
+            ))}
+          </div>
+        </section>
+      )}
+      <section>
+        <h2 style={{ fontSize: "18px" }}>
+          {following.length > 0 ? "More in your area" : "Organizations in your area"}
+        </h2>
+        <div className="card-grid">
+          {rest.map((org) => (
+            <OrgCard key={org.user_id} org={org} onChange={reload} />
+          ))}
+        </div>
+      </section>
+    </>
+  );
+}
+
+const ORG_LABELS = {
+  library: "Library",
+  school: "School",
+  parks: "Parks & recreation",
+  faith: "Faith group",
+  nonprofit: "Nonprofit",
+  government: "Government body",
+  other: "Organization",
+};
+
+function OrgCard({ org, onChange }) {
+  return (
+    <div className="card" style={{ gap: "12px", padding: "22px", alignItems: "flex-start" }}>
+      <span className="avatar-initial warm">{initial(org.display_name)}</span>
+      <div>
+        <Link to={`/profile/${org.user_id}`} style={{ fontWeight: 700, textDecoration: "none" }}>
+          {org.display_name}
+        </Link>
+        <div className="org-line" style={{ marginTop: "6px" }}>
+          <span className="tag tag-gathering">
+            {ORG_LABELS[org.org_category] || "Organization"}
+          </span>
+          {org.verified ? (
+            <span className="trust-verified">✓ Verified</span>
+          ) : (
+            <span className="org-unverified">Unverified</span>
+          )}
+        </div>
+      </div>
+      {org.bio && (
+        <p className="muted" style={{ margin: 0, fontSize: "13.5px" }}>
+          {org.bio}
+        </p>
+      )}
+      <FollowButton orgId={org.user_id} onChange={onChange} />
     </div>
   );
 }

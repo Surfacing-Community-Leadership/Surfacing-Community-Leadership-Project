@@ -11,6 +11,7 @@ from app.models.interest import Interest, user_interests
 from app.models.message import EventMessage
 from app.models.notification import Notification
 from app.models.oauth_account import OAuthAccount
+from app.models.org_follow import OrgFollow
 from app.models.participant import EventParticipant
 from app.models.profile import Profile
 from app.models.report import Report
@@ -29,6 +30,7 @@ __all__ = [
     "Interest",
     "Notification",
     "OAuthAccount",
+    "OrgFollow",
     "Profile",
     "Report",
     "User",

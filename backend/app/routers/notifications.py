@@ -45,6 +45,18 @@ def _render(
             f"/profile/{n.actor_id}" if n.actor_id else "/connections",
         ),
         "help_thanks": (thanks, event_link),
+        # An organization you follow posted. Naming the kind tells you at a
+        # glance whether it's something to attend or something to pitch in on.
+        "org_event": (
+            f"{actor} posted "
+            + (
+                "volunteer work"
+                if event_kind == "volunteer_work"
+                else "a gathering"
+            )
+            + f": {title}",
+            event_link,
+        ),
     }.get(n.type, ("You have a new notification", None))
 
 

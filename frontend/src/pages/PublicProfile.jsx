@@ -5,6 +5,7 @@ import { useApi } from "../hooks/useApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { ConfirmDialog, ReportDialog } from "../components/dialogs.jsx";
 import TrustBadge from "../components/TrustBadge.jsx";
+import FollowButton from "../components/FollowButton.jsx";
 
 function initial(name) {
   return (name || "?").trim().charAt(0).toUpperCase();
@@ -127,9 +128,12 @@ export default function PublicProfile() {
               <span className="tag tag-help_request">Open to helping neighbors</span>
             )}
           </div>
-          {!isMe && (
-            <button onClick={connect}>Connect</button>
-          )}
+          {!isMe &&
+            (profile.account_type === "organization" ? (
+              <FollowButton orgId={userId} />
+            ) : (
+              <button onClick={connect}>Connect</button>
+            ))}
         </div>
 
         {profile.bio && (

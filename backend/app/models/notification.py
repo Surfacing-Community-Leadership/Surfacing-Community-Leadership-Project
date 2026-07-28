@@ -26,6 +26,7 @@ NOTIFICATION_TYPES = (
     "connection_request", # someone asked to connect
     "connection_accepted",# someone accepted your connection request
     "help_thanks",        # a neighbor you helped said thanks
+    "org_event",          # an organization you follow posted something
 )
 
 
@@ -39,7 +40,7 @@ class Notification(Base):
         CheckConstraint(
             "type IN ('event_invite', 'event_rsvp', 'event_cancelled', "
             "'event_deleted', 'event_message', 'connection_request', "
-            "'connection_accepted', 'help_thanks')",
+            "'connection_accepted', 'help_thanks', 'org_event')",
             name="ck_notifications_type",
         ),
         # Newest-first listing and the unread-count both filter by recipient.
