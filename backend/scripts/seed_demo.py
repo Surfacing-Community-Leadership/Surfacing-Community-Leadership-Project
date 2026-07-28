@@ -296,7 +296,13 @@ async def main() -> None:
     #    messages, blocks, reports, access_tokens, and the join tables.
     #    Interests (owned by a migration) are untouched.
     async with engine.begin() as conn:
-        await conn.execute(text("TRUNCATE users, events, communities CASCADE"))
+        # import_areas goes too: it's the ledger of which map tiles have already
+        # been imported, and truncating events without it would leave tiles
+        # marked 'done' for work that no longer exists — the map would show no
+        # imported events until FRESH_FOR (24h) elapsed.
+        await conn.execute(
+            text("TRUNCATE users, events, communities, import_areas CASCADE")
+        )
 
     async with AsyncSessionLocal() as session:
         interests = {
