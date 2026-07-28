@@ -25,6 +25,7 @@ from app.routers import (
     interests,
     messages,
     notifications,
+    organizations,
     participants,
     profiles,
     reports,
@@ -93,6 +94,7 @@ app.include_router(participants.router)
 app.include_router(connections.router)
 app.include_router(blocks.router)
 app.include_router(messages.router)
+app.include_router(organizations.router)
 app.include_router(notifications.router)
 app.include_router(reports.router)
 
