@@ -1,6 +1,9 @@
 import secrets
+import uuid
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from sqlalchemy import select
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi_users.authentication.strategy.db import DatabaseStrategy
 from fastapi_users.exceptions import InvalidPasswordException, UserAlreadyExists
@@ -14,10 +17,22 @@ from app.core.auth import (
     get_user_manager,
 )
 from app.core.config import settings
+from app.core.email import (
+    make_confirm_token,
+    read_confirm_token,
+    send_confirmation_email,
+)
 from app.core.orgs import should_auto_verify
-from app.models import Profile
+from app.models import Profile, User
 from app.routers.deps import DB, CurrentUser
-from app.schemas.auth import LoginRequest, RegisterRequest, UserCreate, UserRead
+from app.schemas.auth import (
+    ConfirmEmailPayload,
+    ConfirmEmailResult,
+    LoginRequest,
+    RegisterRequest,
+    UserCreate,
+    UserRead,
+)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -26,6 +41,7 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 async def register(
     payload: RegisterRequest,
     db: DB,
+    background_tasks: BackgroundTasks,
     user_manager: UserManager = Depends(get_user_manager),
 ):
     try:
@@ -58,15 +74,17 @@ async def register(
         )
     )
 
-    # The ✓ badge is only granted here when the signup email sits on a domain
-    # that can't be casually registered (.gov/.edu/…). Everyone else — including
-    # a library on a .org — starts unverified and an admin grants it after
-    # checking org_website. See app/core/orgs.py.
-    if should_auto_verify(payload.account_type, payload.email):
-        user.is_verified = True
-        db.add(user)
-
     await db.commit()
+
+    # The ✓ badge is NOT granted here. An institutional domain only counts once
+    # the applicant has proven they can read that inbox, so auto-verification is
+    # evaluated when the emailed link is clicked (see confirm_email below).
+    background_tasks.add_task(
+        send_confirmation_email,
+        user.email,
+        payload.display_name,
+        make_confirm_token(user.id),
+    )
     return user
 
 
@@ -113,3 +131,62 @@ async def logout(
     response = await cookie_transport.get_logout_response()
     response.delete_cookie(CSRF_COOKIE_NAME)
     return response
+
+
+@router.post("/confirm-email", response_model=ConfirmEmailResult)
+async def confirm_email(payload: ConfirmEmailPayload, db: DB):
+    """Prove an address is reachable, then re-evaluate the organization badge.
+
+    This is where auto-verification actually happens: an institutional domain
+    means something only once someone has demonstrated they read that inbox.
+    Deliberately unauthenticated — the signed token is the credential, so the
+    link works from whatever device opened the mail.
+    """
+    user_id = read_confirm_token(payload.token)
+    if user_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail="That link is invalid or has expired — ask for a new one",
+        )
+
+    user = await db.get(User, uuid.UUID(user_id))
+    if user is None:
+        raise HTTPException(status_code=400, detail="That link is no longer valid")
+
+    already = user.email_confirmed_at is not None
+    if not already:
+        user.email_confirmed_at = datetime.now(timezone.utc)
+
+    # Grant the org badge now, if the confirmed address earns it.
+    granted = False
+    if not user.is_verified:
+        account_type = await db.scalar(
+            select(Profile.account_type).where(Profile.user_id == user.id)
+        )
+        if should_auto_verify(account_type or "person", user.email):
+            user.is_verified = True
+            granted = True
+
+    await db.commit()
+    return ConfirmEmailResult(
+        email=user.email, already_confirmed=already, organization_verified=granted
+    )
+
+
+@router.post("/confirm-email/request", status_code=202)
+async def resend_confirmation(
+    db: DB, user: CurrentUser, background_tasks: BackgroundTasks
+) -> None:
+    """Send a fresh link to the signed-in user's own address. Scoped to the
+    current session so it can't be used to probe which emails are registered."""
+    if user.email_confirmed_at is not None:
+        raise HTTPException(status_code=409, detail="This address is already confirmed")
+    display_name = await db.scalar(
+        select(Profile.display_name).where(Profile.user_id == user.id)
+    )
+    background_tasks.add_task(
+        send_confirmation_email,
+        user.email,
+        display_name or "neighbor",
+        make_confirm_token(user.id),
+    )

@@ -31,7 +31,9 @@ def _summary(e: Event, my_rsvp: str | None = None) -> EventSummary:
 
 @router.get("/me", response_model=UserMe)
 async def read_me(user: CurrentUser):
-    return user
+    # email_confirmed is derived from a timestamp, so it can't map straight off
+    # the ORM row.
+    return UserMe.from_user(user)
 
 
 @router.get("/me/events", response_model=list[EventSummary])

@@ -53,11 +53,34 @@ class UserRead(BaseModel):
 
     id: uuid.UUID
     email: str
+    # The organization badge — not email confirmation. See models/user.py.
     is_verified: bool
 
 
 class UserMe(UserRead):
     is_superuser: bool
+    email_confirmed: bool
+
+    @classmethod
+    def from_user(cls, user) -> "UserMe":
+        return cls(
+            id=user.id,
+            email=user.email,
+            is_verified=user.is_verified,
+            is_superuser=user.is_superuser,
+            email_confirmed=user.email_confirmed_at is not None,
+        )
+
+
+class ConfirmEmailPayload(BaseModel):
+    token: str
+
+
+class ConfirmEmailResult(BaseModel):
+    email: str
+    already_confirmed: bool
+    # True when confirming this address also earned the organization badge.
+    organization_verified: bool
 
 
 class LoginRequest(BaseModel):

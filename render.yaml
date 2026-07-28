@@ -36,3 +36,13 @@ services:
       # developer.ticketmaster.com. Leave unset to disable importing.
       - key: TICKETMASTER_API_KEY
         sync: false
+      # Confirmation emails. Without a key the link is only logged server-side,
+      # so set this before relying on organization auto-verification.
+      - key: RESEND_API_KEY
+        sync: false
+      # Confirmation links must point at the deployed origin.
+      - key: PUBLIC_BASE_URL
+        fromService:
+          name: ours
+          type: web
+          property: host

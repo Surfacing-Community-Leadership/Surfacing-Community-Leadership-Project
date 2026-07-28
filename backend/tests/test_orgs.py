@@ -8,7 +8,18 @@ public.
 
 import pytest
 
+from app.core.email import make_confirm_token
 from app.core.orgs import is_gated_domain, should_auto_verify
+
+
+async def register_and_confirm(client, payload):
+    """Sign up and click the emailed link, which is what actually grants the
+    organization badge on a gated domain."""
+    created = (await client.post("/api/auth/register", json=payload)).json()
+    await client.post(
+        "/api/auth/confirm-email", json={"token": make_confirm_token(created["id"])}
+    )
+    return created["id"]
 
 LIBRARY = {
     "account_type": "organization",
@@ -58,12 +69,14 @@ def test_personal_accounts_never_auto_verify_even_on_a_gated_domain():
 
 # --- registration -----------------------------------------------------------
 
-async def test_org_on_gated_domain_is_verified_at_signup(client):
+async def test_gated_domain_is_not_verified_until_the_email_is_confirmed(client):
+    """An institutional domain earns the badge only once someone proves they can
+    read that inbox — see test_email_confirmation.py for the second half."""
     r = await client.post(
         "/api/auth/register", json=org_payload("office@ps321.k12.ny.us")
     )
     assert r.status_code == 201
-    assert r.json()["is_verified"] is True
+    assert r.json()["is_verified"] is False
 
 
 async def test_org_on_open_domain_starts_unverified(client):
@@ -120,7 +133,7 @@ async def test_personal_signup_ignores_stray_org_fields(client):
 async def test_public_profile_shows_org_details_but_not_the_contact_person(
     client, make_user
 ):
-    await client.post("/api/auth/register", json=org_payload("office@ps321.k12.ny.us"))
+    await register_and_confirm(client, org_payload("office@ps321.k12.ny.us"))
     login = await client.post(
         "/api/auth/login",
         json={"email": "office@ps321.k12.ny.us", "password": "password-123"},
@@ -141,7 +154,7 @@ async def test_public_profile_shows_org_details_but_not_the_contact_person(
 
 
 async def test_org_sees_its_own_contact_person(client):
-    await client.post("/api/auth/register", json=org_payload("office@ps321.k12.ny.us"))
+    await register_and_confirm(client, org_payload("office@ps321.k12.ny.us"))
     await client.post(
         "/api/auth/login",
         json={"email": "office@ps321.k12.ny.us", "password": "password-123"},
@@ -152,7 +165,7 @@ async def test_org_sees_its_own_contact_person(client):
 
 
 async def test_search_results_carry_the_org_flags(client, make_user):
-    await client.post("/api/auth/register", json=org_payload("office@ps321.k12.ny.us"))
+    await register_and_confirm(client, org_payload("office@ps321.k12.ny.us"))
     viewer = await make_user("viewer@example.com", "Viewer")
 
     hits = (await viewer.get("/api/profiles?q=Sunset")).json()

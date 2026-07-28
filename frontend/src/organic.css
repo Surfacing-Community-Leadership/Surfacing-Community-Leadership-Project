@@ -685,6 +685,59 @@
   color: color-mix(in srgb, var(--color-text) 55%, transparent);
 }
 
+/* ---- Email confirmation ------------------------------------------------- */
+.org.confirm-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  max-width: 1180px;
+  margin: 0 auto 18px;
+  padding: 12px 18px;
+  border-radius: var(--radius-lg);
+  background: var(--color-accent-100);
+  color: var(--color-accent-800);
+  font-size: 14px;
+  font-weight: 500;
+}
+.confirm-banner-actions {
+  display: inline-flex;
+  gap: 14px;
+  flex-shrink: 0;
+}
+.org.confirm-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--color-bg);
+}
+.confirm-card {
+  width: min(460px, 100%);
+  display: grid;
+  gap: 14px;
+  justify-items: start;
+  padding: 34px;
+  border-radius: calc(var(--radius-lg) * 1.15);
+  background: var(--color-surface);
+}
+.confirm-card h1 {
+  margin: 4px 0 0;
+  font-size: clamp(26px, 4vw, 34px);
+}
+.confirm-card p {
+  margin: 0;
+}
+.confirm-verified {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-accent-2-800);
+  background: var(--color-accent-2-100);
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+}
+
 /* ---- Organization accounts --------------------------------------------- */
 .org .org-line {
   display: flex;
