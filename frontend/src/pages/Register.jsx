@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { HeartMark } from "../components/Logo.jsx";
+import GoogleButton from "../components/GoogleButton.jsx";
 
 export default function Register() {
   const { register } = useAuth();
@@ -236,6 +237,9 @@ export default function Register() {
           <button type="submit" className="btn-block" disabled={submitting}>
             {submitting ? "Creating account…" : "Create account →"}
           </button>
+          {/* Google signup always creates a personal account, so only offer it
+              on the person tab — an organization needs to supply its details. */}
+          {!isOrg && <GoogleButton next="/onboarding" label="Sign up with Google" />}
           <p
             className="field-hint"
             style={{ marginTop: "18px", lineHeight: 1.55 }}

@@ -1,8 +1,11 @@
 import secrets
 import uuid
 from datetime import datetime, timezone
+from urllib.parse import quote
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from fastapi.responses import RedirectResponse
+from fastapi_users.password import PasswordHelper
 from sqlalchemy import select
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi_users.authentication.strategy.db import DatabaseStrategy
@@ -22,10 +25,19 @@ from app.core.email import (
     read_confirm_token,
     send_confirmation_email,
 )
+from app.core.oauth import (
+    GoogleError,
+    authorize_url,
+    exchange_code_for_profile,
+    google_enabled,
+    make_state,
+    read_state,
+)
 from app.core.orgs import should_auto_verify
-from app.models import Profile, User
+from app.models import OAuthAccount, Profile, User
 from app.routers.deps import DB, CurrentUser
 from app.schemas.auth import (
+    AuthProviders,
     ConfirmEmailPayload,
     ConfirmEmailResult,
     LoginRequest,
@@ -35,6 +47,9 @@ from app.schemas.auth import (
 )
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+# Hashes the throwaway password an OAuth-only account is given.
+password_helper = PasswordHelper()
 
 
 @router.post("/register", response_model=UserRead, status_code=201)
@@ -131,6 +146,165 @@ async def logout(
     response = await cookie_transport.get_logout_response()
     response.delete_cookie(CSRF_COOKIE_NAME)
     return response
+
+
+@router.get("/providers", response_model=AuthProviders)
+async def list_providers():
+    """Which third-party sign-ins are configured, so the UI can hide a button
+    that would only lead to an error."""
+    return AuthProviders(google=google_enabled())
+
+
+@router.get("/google/start")
+async def google_start(next: str = "/map"):
+    """Send the browser to Google's consent screen."""
+    if not google_enabled():
+        raise HTTPException(status_code=503, detail="Google sign-in isn't configured")
+    # Only allow same-site destinations, so ?next= can't be used to bounce
+    # someone to another origin after signing in.
+    safe_next = next if next.startswith("/") and not next.startswith("//") else "/map"
+    return RedirectResponse(authorize_url(make_state(safe_next)), status_code=307)
+
+
+@router.get("/google/callback")
+async def google_callback(
+    db: DB,
+    request: Request,
+    strategy: DatabaseStrategy = Depends(get_database_strategy),
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+):
+    """Finish the round trip: sign the person in, creating an account if needed.
+
+    Ends in a redirect either way — this URL is opened by the browser, not by
+    our own JavaScript, so an error has to be shown as a page rather than a JSON
+    body.
+    """
+    if not google_enabled():
+        raise HTTPException(status_code=503, detail="Google sign-in isn't configured")
+
+    if error or not code or not state:
+        # The person cancelled, or Google sent us something unusable.
+        return _oauth_failure("Google sign-in was cancelled")
+
+    parsed_state = read_state(state)
+    if parsed_state is None:
+        # Unsigned, tampered with, or older than STATE_MAX_AGE_SECONDS — this is
+        # the CSRF guard on the callback.
+        return _oauth_failure("That sign-in link expired — please try again")
+
+    try:
+        profile = await exchange_code_for_profile(code)
+    except GoogleError as exc:
+        return _oauth_failure(str(exc))
+
+    user, is_new = await _user_for_google_profile(db, profile)
+    if user is None:
+        return _oauth_failure(
+            "An account already uses that email. Log in with your password instead."
+        )
+    if not user.is_active:
+        return _oauth_failure("That account has been disabled")
+
+    # Same session + CSRF cookie pair the password login issues.
+    token = await strategy.write_token(user)
+    landing = parsed_state.get("next") or "/map"
+    if is_new:
+        landing = "/onboarding"
+    response = RedirectResponse(landing, status_code=303)
+    response.set_cookie(
+        AUTH_COOKIE_NAME,
+        token,
+        max_age=settings.access_token_lifetime_seconds,
+        secure=settings.cookie_secure,
+        httponly=True,
+        samesite="lax",
+    )
+    response.set_cookie(
+        CSRF_COOKIE_NAME,
+        secrets.token_hex(16),
+        max_age=settings.access_token_lifetime_seconds,
+        secure=settings.cookie_secure,
+        httponly=False,
+        samesite="lax",
+    )
+    return response
+
+
+def _oauth_failure(message: str) -> RedirectResponse:
+    return RedirectResponse(f"/login?error={quote(message)}", status_code=303)
+
+
+async def _user_for_google_profile(db, profile: dict) -> tuple[User | None, bool]:
+    """Find or create the local account behind a Google identity.
+
+    Returns (user, is_new). A None user means the email belongs to an existing
+    password account that we refuse to take over — see below.
+    """
+    linked = await db.scalar(
+        select(OAuthAccount).where(
+            OAuthAccount.provider == "google",
+            OAuthAccount.provider_account_id == profile["sub"],
+        )
+    )
+    if linked is not None:
+        return await db.get(User, linked.user_id), False
+
+    existing = await db.scalar(select(User).where(User.email == profile["email"]))
+    if existing is not None:
+        # Adopting an existing account is only safe when Google vouches for the
+        # address; otherwise anyone could create an unverified Google identity
+        # claiming someone else's email and walk into their account.
+        if not profile["email_verified"]:
+            return None, False
+        db.add(
+            OAuthAccount(
+                user_id=existing.id,
+                provider="google",
+                provider_account_id=profile["sub"],
+                email=profile["email"],
+            )
+        )
+        if existing.email_confirmed_at is None:
+            existing.email_confirmed_at = datetime.now(timezone.utc)
+        await db.commit()
+        return existing, False
+
+    # Brand new person. Google sign-in always creates a personal account —
+    # organizations register through the email form, where they supply the
+    # category and website an admin needs.
+    user = User(
+        email=profile["email"],
+        # OAuth accounts have no password anyone knows; store an unusable random
+        # one so the column stays non-null and password login can't succeed.
+        hashed_password=password_helper.hash(secrets.token_urlsafe(32)),
+        # Google verified the address, so this is genuinely confirmed. Note this
+        # sets email_confirmed_at and NOT org_verified — the organization badge
+        # is never granted by signing in.
+        email_confirmed_at=(
+            datetime.now(timezone.utc) if profile["email_verified"] else None
+        ),
+    )
+    db.add(user)
+    await db.flush()
+    db.add(
+        Profile(
+            user_id=user.id,
+            display_name=profile["name"] or profile["email"].split("@")[0],
+            avatar_key="🙂",
+        )
+    )
+    db.add(
+        OAuthAccount(
+            user_id=user.id,
+            provider="google",
+            provider_account_id=profile["sub"],
+            email=profile["email"],
+        )
+    )
+    await db.commit()
+    return user, True
 
 
 @router.post("/confirm-email", response_model=ConfirmEmailResult)

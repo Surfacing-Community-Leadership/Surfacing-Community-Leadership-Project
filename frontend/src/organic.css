@@ -690,6 +690,48 @@
   color: color-mix(in srgb, var(--color-text) 55%, transparent);
 }
 
+/* ---- Third-party sign-in ------------------------------------------------ */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 0 14px;
+  font-size: 12px;
+  color: color-mix(in srgb, var(--color-text) 50%, transparent);
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--color-divider);
+}
+/* Google's brand guidance wants its own mark on a neutral surface, so this one
+   button steps outside the accent palette on purpose. */
+.org .google-btn,
+.google-btn {
+  width: 100%;
+  gap: 10px;
+  padding: 12px;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f1f1f;
+  background: #ffffff;
+  border: 1px solid var(--color-divider);
+  border-radius: 999px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.org .google-btn:hover,
+.google-btn:hover {
+  background: #f6f6f6;
+  border-color: color-mix(in srgb, var(--color-text) 35%, transparent);
+  color: #1f1f1f;
+}
+
 /* ---- Email confirmation ------------------------------------------------- */
 .org.confirm-banner {
   display: flex;

@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     # (same origin serves the SPA); locally it's the Vite dev server.
     public_base_url: str = "http://localhost:5173"
 
+    # --- Google sign-in ---------------------------------------------------
+    # From a Google Cloud OAuth 2.0 client. Unset disables the feature: the
+    # button is hidden and the endpoints report it as unavailable.
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
+
     @field_validator("database_url")
     @classmethod
     def _normalize_database_url(cls, v: str) -> str:

@@ -40,6 +40,13 @@ services:
       # so set this before relying on organization auto-verification.
       - key: RESEND_API_KEY
         sync: false
+      # Google sign-in. Create an OAuth client in the Google Cloud console and
+      # register <origin>/api/auth/google/callback as an authorised redirect URI.
+      # Unset hides the button and disables the endpoints.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
       # Confirmation links must point at the deployed origin.
       - key: PUBLIC_BASE_URL
         fromService:

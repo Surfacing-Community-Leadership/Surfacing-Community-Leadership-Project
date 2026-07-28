@@ -72,6 +72,12 @@ class UserMe(UserRead):
         )
 
 
+class AuthProviders(BaseModel):
+    """Which third-party sign-ins are configured on this deployment."""
+
+    google: bool
+
+
 class ConfirmEmailPayload(BaseModel):
     token: str
 
