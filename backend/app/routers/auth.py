@@ -159,12 +159,12 @@ async def confirm_email(payload: ConfirmEmailPayload, db: DB):
 
     # Grant the org badge now, if the confirmed address earns it.
     granted = False
-    if not user.is_verified:
+    if not user.org_verified:
         account_type = await db.scalar(
             select(Profile.account_type).where(Profile.user_id == user.id)
         )
         if should_auto_verify(account_type or "person", user.email):
-            user.is_verified = True
+            user.org_verified = True
             granted = True
 
     await db.commit()

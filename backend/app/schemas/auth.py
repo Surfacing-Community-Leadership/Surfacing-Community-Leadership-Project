@@ -54,7 +54,7 @@ class UserRead(BaseModel):
     id: uuid.UUID
     email: str
     # The organization badge — not email confirmation. See models/user.py.
-    is_verified: bool
+    org_verified: bool
 
 
 class UserMe(UserRead):
@@ -66,7 +66,7 @@ class UserMe(UserRead):
         return cls(
             id=user.id,
             email=user.email,
-            is_verified=user.is_verified,
+            org_verified=user.org_verified,
             is_superuser=user.is_superuser,
             email_confirmed=user.email_confirmed_at is not None,
         )

@@ -19,11 +19,12 @@ class User(Base):
     email: Mapped[str] = mapped_column(Text, unique=True)
     hashed_password: Mapped[str] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
-    # NOTE: is_verified is the *organization* badge (a vetted local institution),
-    # NOT email confirmation — those are deliberately separate signals. Proving
-    # you can read an inbox is email_confirmed_at below; being a real library is
-    # is_verified. Conflating them would hand the badge to every signup.
-    is_verified: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    # The organization badge: a vetted local institution. Named org_verified,
+    # not is_verified, because auth libraries reach for "is_verified" to mean
+    # "email confirmed" — fastapi-users' verify router and its OAuth callback
+    # both write to it — and granting this by that route would hand every signup
+    # a badge. Email confirmation is email_confirmed_at, below.
+    org_verified: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     is_superuser: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     # Set when the address is proven reachable by clicking an emailed link.
     email_confirmed_at: Mapped[datetime | None] = mapped_column(

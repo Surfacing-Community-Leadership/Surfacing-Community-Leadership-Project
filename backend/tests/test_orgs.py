@@ -76,7 +76,7 @@ async def test_gated_domain_is_not_verified_until_the_email_is_confirmed(client)
         "/api/auth/register", json=org_payload("office@ps321.k12.ny.us")
     )
     assert r.status_code == 201
-    assert r.json()["is_verified"] is False
+    assert r.json()["org_verified"] is False
 
 
 async def test_org_on_open_domain_starts_unverified(client):
@@ -85,7 +85,7 @@ async def test_org_on_open_domain_starts_unverified(client):
         "/api/auth/register", json=org_payload("hello@brooklynlibrary.org")
     )
     assert r.status_code == 201
-    assert r.json()["is_verified"] is False
+    assert r.json()["org_verified"] is False
 
 
 async def test_claiming_org_does_not_grant_the_badge(client):
@@ -95,7 +95,7 @@ async def test_claiming_org_does_not_grant_the_badge(client):
         json=org_payload("impostor@gmail.com", display_name="Totally The Library"),
     )
     assert r.status_code == 201
-    assert r.json()["is_verified"] is False
+    assert r.json()["org_verified"] is False
 
 
 async def test_org_signup_requires_category_and_website(client):
@@ -125,7 +125,7 @@ async def test_personal_signup_ignores_stray_org_fields(client):
         },
     )
     assert r.status_code == 201
-    assert r.json()["is_verified"] is False
+    assert r.json()["org_verified"] is False
 
 
 # --- what other people can see ---------------------------------------------

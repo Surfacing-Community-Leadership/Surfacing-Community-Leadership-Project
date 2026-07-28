@@ -60,7 +60,7 @@ class Profile(Base):
     # --- organization accounts -------------------------------------------
     # An account declares at signup whether it represents a person or a local
     # institution (library, school, parks dept, faith group, …). The *claim* is
-    # self-service; the ✓ badge (User.is_verified) is not — see core/orgs.py.
+    # self-service; the ✓ badge (User.org_verified) is not — see core/orgs.py.
     account_type: Mapped[str] = mapped_column(Text, server_default=text("'person'"))
     org_category: Mapped[str | None] = mapped_column(Text)
     # Public: residents see these on the org's profile, and an admin uses the

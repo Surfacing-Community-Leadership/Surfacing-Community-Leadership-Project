@@ -147,11 +147,11 @@ async def test_confirming_a_gated_domain_grants_the_org_badge(client):
     created = await signup(
         client, "office@ps321.k12.ny.us", "PS 321 Library", **ORG
     )
-    assert created["is_verified"] is False  # not until the inbox is proven
+    assert created["org_verified"] is False  # not until the inbox is proven
 
     result = await confirm(client, make_confirm_token(created["id"]))
     assert result.json()["organization_verified"] is True
-    assert (await me(client))["is_verified"] is True
+    assert (await me(client))["org_verified"] is True
 
 
 async def test_confirming_an_open_domain_org_grants_nothing(client):
@@ -162,7 +162,7 @@ async def test_confirming_an_open_domain_org_grants_nothing(client):
 
     result = await confirm(client, make_confirm_token(created["id"]))
     assert result.json()["organization_verified"] is False
-    assert (await me(client))["is_verified"] is False
+    assert (await me(client))["org_verified"] is False
 
 
 async def test_a_person_on_a_gated_domain_gets_no_badge(client):
@@ -173,7 +173,7 @@ async def test_a_person_on_a_gated_domain_gets_no_badge(client):
     assert result.json()["organization_verified"] is False
     mine = await me(client)
     assert mine["email_confirmed"] is True
-    assert mine["is_verified"] is False
+    assert mine["org_verified"] is False
 
 
 # --- resending --------------------------------------------------------------

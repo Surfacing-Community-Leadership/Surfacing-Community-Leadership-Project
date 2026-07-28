@@ -106,7 +106,7 @@ async def search_profiles(
         await db.execute(
             # Joined so a verified organization is recognisable straight from
             # search results, without a request per row.
-            select(Profile, User.is_verified)
+            select(Profile, User.org_verified)
             .join(User, User.id == Profile.user_id)
             .where(Profile.display_name.ilike(f"%{escaped}%"))
             .where(Profile.user_id != user.id)
@@ -161,7 +161,7 @@ async def read_public_profile(user_id: uuid.UUID, db: DB, user: CurrentUser):
         raise HTTPException(status_code=404, detail="Profile not found")
     row = (
         await db.execute(
-            select(Profile, User.is_verified)
+            select(Profile, User.org_verified)
             .join(User, User.id == Profile.user_id)
             .where(Profile.user_id == user_id)
         )
