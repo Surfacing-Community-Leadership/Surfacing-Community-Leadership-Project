@@ -15,6 +15,7 @@ def _render(
     actor_name: str | None,
     event_title: str | None,
     thanks_note: str | None = None,
+    event_kind: str | None = None,
 ):
     """Compose the human sentence and click-target for a notification from its
     structured fields, so stored rows never hold stale text."""
@@ -22,12 +23,15 @@ def _render(
     title = event_title or "an event"
     event_link = f"/events/{n.event_id}" if n.event_id else None
     # A thank-you carries the neighbor's own words when they left any — read
-    # live from help_thanks so an edited note is never stale here.
-    thanks = (
-        f'{actor} said thanks for your help: "{thanks_note}"'
-        if thanks_note
-        else f"{actor} said thanks for your help with {title}"
-    )
+    # live from help_thanks so an edited note is never stale here. An
+    # organization confirming a volunteer shift reads differently from a
+    # neighbour thanking you for a personal favour.
+    if event_kind == "volunteer_work":
+        thanks = f"{actor} confirmed you volunteered at {title}"
+    else:
+        thanks = f"{actor} said thanks for your help with {title}"
+    if thanks_note:
+        thanks = f'{thanks}: "{thanks_note}"'
     return {
         "event_invite": (f"{actor} invited you to {title}", event_link),
         # "RSVP'd", not "is going" — this fires for maybe as well as going.
@@ -53,7 +57,13 @@ async def list_notifications(
 ):
     rows = (
         await db.execute(
-            select(Notification, Profile.display_name, Event.title, HelpThanks.note)
+            select(
+                Notification,
+                Profile.display_name,
+                Event.title,
+                HelpThanks.note,
+                Event.kind,
+            )
             .outerjoin(Profile, Profile.user_id == Notification.actor_id)
             .outerjoin(Event, Event.id == Notification.event_id)
             # For a help_thanks the recipient of the notification *is* the
@@ -71,8 +81,8 @@ async def list_notifications(
     ).all()
 
     out = []
-    for n, actor_name, event_title, thanks_note in rows:
-        message, link = _render(n, actor_name, event_title, thanks_note)
+    for n, actor_name, event_title, thanks_note, event_kind in rows:
+        message, link = _render(n, actor_name, event_title, thanks_note, event_kind)
         out.append(
             NotificationRead(
                 id=n.id,

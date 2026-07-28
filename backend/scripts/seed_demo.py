@@ -237,7 +237,7 @@ async def main() -> None:
             user = User(
                 email=f"{prefix}@example.com",
                 hashed_password=hashed,
-                is_verified=(prefix == "bob"),  # Bob is the "verified org" persona
+                org_verified=(prefix == "bob"),  # Bob is the "verified org" persona
             )
             session.add(user)
             await session.flush()

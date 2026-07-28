@@ -10,6 +10,40 @@ function initial(name) {
   return (name || "?").trim().charAt(0).toUpperCase();
 }
 
+const ORG_LABELS = {
+  library: "Library",
+  school: "School",
+  parks: "Parks & recreation",
+  faith: "Faith group",
+  nonprofit: "Nonprofit",
+  government: "Government body",
+  other: "Organization",
+};
+
+// An organization always says so. Until a moderator has checked it, it says
+// that too — so nobody mistakes a self-declared account for a vetted one.
+function OrgLine({ profile }) {
+  return (
+    <div className="org-line">
+      <span className="tag tag-gathering">
+        {ORG_LABELS[profile.org_category] || "Organization"}
+      </span>
+      {profile.verified ? (
+        <span className="trust-verified">✓ Verified</span>
+      ) : (
+        <span className="org-unverified" title="A moderator hasn't checked this account yet">
+          Unverified
+        </span>
+      )}
+      {profile.org_website && (
+        <a href={profile.org_website} target="_blank" rel="noreferrer noopener">
+          Website ↗
+        </a>
+      )}
+    </div>
+  );
+}
+
 // Another person's profile, with the safety/social actions: connect, block,
 // report.
 export default function PublicProfile() {
@@ -86,6 +120,9 @@ export default function PublicProfile() {
           )}
           <div style={{ flex: 1, minWidth: "180px" }}>
             <h1 style={{ margin: "0 0 8px" }}>{profile.display_name}</h1>
+            {profile.account_type === "organization" && (
+              <OrgLine profile={profile} />
+            )}
             {profile.open_to_help && (
               <span className="tag tag-help_request">Open to helping neighbors</span>
             )}
@@ -100,6 +137,13 @@ export default function PublicProfile() {
             {profile.bio}
           </p>
         )}
+        {profile.account_type === "organization" &&
+          (profile.org_phone || profile.org_address) && (
+            <p className="muted org-contact" style={{ position: "relative", margin: 0 }}>
+              {[profile.org_address, profile.org_phone].filter(Boolean).join(" · ")}
+            </p>
+          )}
+
         <div style={{ position: "relative" }}>
           <TrustBadge userId={userId} />
         </div>

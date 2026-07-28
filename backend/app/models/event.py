@@ -26,7 +26,8 @@ class Event(Base):
     __tablename__ = "events"
     __table_args__ = (
         CheckConstraint(
-            "kind IN ('gathering', 'help_request')", name="ck_events_kind"
+            "kind IN ('gathering', 'help_request', 'volunteer_work')",
+            name="ck_events_kind",
         ),
         CheckConstraint(
             "visibility IN ('public', 'community', 'private')",

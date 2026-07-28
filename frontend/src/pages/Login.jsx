@@ -1,13 +1,18 @@
 import { useState } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { HeartMark } from "../components/Logo.jsx";
+import GoogleButton from "../components/GoogleButton.jsx";
 
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from?.pathname || "/map";
+
+  // A failed Google round trip comes back as ?error=… on this page.
+  const [params] = useSearchParams();
+  const oauthError = params.get("error");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -52,7 +57,9 @@ export default function Login() {
           <p className="auth-lead">
             New here? <Link to="/register">Create an account</Link>
           </p>
-          {error && <div className="alert">{error}</div>}
+          {(error || oauthError) && (
+            <div className="alert">{error || oauthError}</div>
+          )}
           <div className="field">
             <label htmlFor="lg-email">Email</label>
             <input
@@ -80,6 +87,7 @@ export default function Login() {
           <button type="submit" className="btn-block" disabled={submitting}>
             {submitting ? "Logging in…" : "Log in →"}
           </button>
+          <GoogleButton next={from} label="Continue with Google" />
           <p
             className="muted"
             style={{ textAlign: "center", marginTop: "26px" }}

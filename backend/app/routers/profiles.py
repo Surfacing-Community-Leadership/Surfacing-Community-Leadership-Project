@@ -24,6 +24,19 @@ AVATAR_TYPES = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
 MAX_AVATAR_BYTES = 2 * 1024 * 1024
 
 
+def _public(profile: Profile, verified: bool) -> ProfilePublic:
+    """ProfilePublic carries the ✓ flag, which lives on users — so it has to be
+    stitched in rather than read straight off the Profile row."""
+    return ProfilePublic(
+        **{
+            field: getattr(profile, field)
+            for field in ProfilePublic.model_fields
+            if field != "verified"
+        },
+        verified=bool(verified),
+    )
+
+
 async def _my_profile(db: AsyncSession, user: User) -> Profile:
     profile = await db.scalar(select(Profile).where(Profile.user_id == user.id))
     if profile is None:
@@ -89,9 +102,12 @@ async def search_profiles(
     i_blocked = select(Block.blocked_id).where(Block.blocker_id == user.id)
     blocked_me = select(Block.blocker_id).where(Block.blocked_id == user.id)
 
-    profiles = (
-        await db.scalars(
-            select(Profile)
+    rows = (
+        await db.execute(
+            # Joined so a verified organization is recognisable straight from
+            # search results, without a request per row.
+            select(Profile, User.org_verified)
+            .join(User, User.id == Profile.user_id)
             .where(Profile.display_name.ilike(f"%{escaped}%"))
             .where(Profile.user_id != user.id)
             .where(Profile.user_id.not_in(i_blocked))
@@ -100,7 +116,7 @@ async def search_profiles(
             .limit(20)
         )
     ).all()
-    return profiles
+    return [_public(profile, verified) for profile, verified in rows]
 
 
 @router.get("/me/interests", response_model=InterestIds)
@@ -143,10 +159,16 @@ async def read_public_profile(user_id: uuid.UUID, db: DB, user: CurrentUser):
     # endpoint already excludes blocked people; this closes the direct-URL path).
     if user_id != user.id and await blocked_either_way(db, user.id, user_id):
         raise HTTPException(status_code=404, detail="Profile not found")
-    profile = await db.scalar(select(Profile).where(Profile.user_id == user_id))
-    if profile is None:
+    row = (
+        await db.execute(
+            select(Profile, User.org_verified)
+            .join(User, User.id == Profile.user_id)
+            .where(Profile.user_id == user_id)
+        )
+    ).first()
+    if row is None:
         raise HTTPException(status_code=404, detail="Profile not found")
-    return profile
+    return _public(row[0], row[1])
 
 
 @router.get("/{user_id}/trust", response_model=TrustRecord)

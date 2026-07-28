@@ -67,6 +67,13 @@ async def get_my_community_id(db: AsyncSession, user_id: uuid.UUID) -> uuid.UUID
     return await db.scalar(select(Profile.community_id).where(Profile.user_id == user_id))
 
 
+async def get_account_type(db: AsyncSession, user_id: uuid.UUID) -> str:
+    """'person' or 'organization' — decides which kinds of event you may post."""
+    return (
+        await db.scalar(select(Profile.account_type).where(Profile.user_id == user_id))
+    ) or "person"
+
+
 def blocked_counterparts(user_id: uuid.UUID):
     """Subquery of every user id that has a block with user_id, in either
     direction. Usable inside not_in() filters."""

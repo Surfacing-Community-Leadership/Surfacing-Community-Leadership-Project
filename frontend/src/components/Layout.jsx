@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { api } from "../api/client.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { HeartMark } from "./Logo.jsx";
 import {
@@ -60,6 +62,46 @@ const OutIcon = (p) => (
     <path d="M10 16.5 14.5 12 10 7.5M14.5 12H3.5" />
   </svg>
 );
+
+// A quiet nudge, not a wall: unconfirmed accounts keep full use of the app.
+// Dismissable for the session so it never nags.
+function ConfirmEmailNotice() {
+  const { user } = useAuth();
+  const [dismissed, setDismissed] = useState(false);
+  const [status, setStatus] = useState(null);
+
+  if (!user || user.email_confirmed !== false || dismissed) return null;
+
+  async function resend() {
+    setStatus("sending");
+    try {
+      await api.post("/api/auth/confirm-email/request");
+      setStatus("sent");
+    } catch (err) {
+      setStatus(err.message);
+    }
+  }
+
+  return (
+    <div className="org confirm-banner">
+      <span>
+        {status === "sent"
+          ? `Sent — check ${user.email} for the link.`
+          : `Confirm ${user.email} so we know we can reach you.`}
+      </span>
+      <span className="confirm-banner-actions">
+        {status !== "sent" && (
+          <button className="link-button" onClick={resend} disabled={status === "sending"}>
+            {status === "sending" ? "Sending…" : "Resend link"}
+          </button>
+        )}
+        <button className="link-button" onClick={() => setDismissed(true)}>
+          Dismiss
+        </button>
+      </span>
+    </div>
+  );
+}
 
 const NAV = [
   { to: "/map", label: "Map", Icon: MapIcon },
@@ -149,6 +191,7 @@ export default function Layout() {
         </nav>
 
         <main className="app-main">
+          <ConfirmEmailNotice />
           <Outlet />
         </main>
       </div>

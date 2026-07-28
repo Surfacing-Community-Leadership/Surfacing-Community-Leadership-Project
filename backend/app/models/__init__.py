@@ -10,6 +10,7 @@ from app.models.import_area import ImportArea
 from app.models.interest import Interest, user_interests
 from app.models.message import EventMessage
 from app.models.notification import Notification
+from app.models.oauth_account import OAuthAccount
 from app.models.participant import EventParticipant
 from app.models.profile import Profile
 from app.models.report import Report
@@ -27,6 +28,7 @@ __all__ = [
     "ImportArea",
     "Interest",
     "Notification",
+    "OAuthAccount",
     "Profile",
     "Report",
     "User",

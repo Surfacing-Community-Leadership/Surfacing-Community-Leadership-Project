@@ -16,6 +16,7 @@ from app.routers.deps import (
     DB,
     CurrentUser,
     blocked_counterparts,
+    get_account_type,
     get_event_or_404,
     get_my_community_id,
     get_participation,
@@ -78,6 +79,29 @@ async def _resolve_tag(db, tag_id) -> Interest | None:
     if tag is None:
         raise HTTPException(status_code=422, detail="Unknown tag")
     return tag
+
+
+async def _require_kind_allowed(db, user, kind: str) -> None:
+    """Organizations and individuals ask for hands in different ways.
+
+    A person posts a help_request — a personal favour from a neighbour. An
+    organization posts volunteer_work — an institutional shift many people can
+    join. Each is offered only the one that fits, so the map stays honest about
+    what a listing actually is.
+    """
+    if kind == "gathering":
+        return
+    account_type = await get_account_type(db, user.id)
+    if kind == "volunteer_work" and account_type != "organization":
+        raise HTTPException(
+            status_code=403,
+            detail="Only organization accounts can post volunteer work",
+        )
+    if kind == "help_request" and account_type == "organization":
+        raise HTTPException(
+            status_code=403,
+            detail="Organizations post volunteer work rather than help requests",
+        )
 
 
 async def _validate_community(db, community_id) -> None:
@@ -172,6 +196,7 @@ async def discover_events(
 
 @router.post("", response_model=EventSummary, status_code=201)
 async def create_event(payload: EventCreate, db: DB, user: CurrentUser):
+    await _require_kind_allowed(db, user, payload.kind)
     await _validate_community(db, payload.community_id)
     tag = await _resolve_tag(db, payload.tag_id)
 

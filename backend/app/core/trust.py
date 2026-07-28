@@ -77,7 +77,7 @@ async def trust_record(db: AsyncSession, user_id: uuid.UUID) -> dict:
         .select_from(HelpThanks)
         .where(HelpThanks.helper_id == user_id)
     )
-    verified = await db.scalar(select(User.is_verified).where(User.id == user_id))
+    verified = await db.scalar(select(User.org_verified).where(User.id == user_id))
 
     counts = {
         "hosted": hosted or 0,

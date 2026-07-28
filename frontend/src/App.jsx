@@ -5,6 +5,7 @@ import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
 import Onboarding from "./pages/Onboarding.jsx";
 import Landing from "./pages/Landing.jsx";
+import ConfirmEmail from "./pages/ConfirmEmail.jsx";
 import MapHome from "./pages/MapHome.jsx";
 import EventDetail from "./pages/EventDetail.jsx";
 import CreateEvent from "./pages/CreateEvent.jsx";
@@ -23,6 +24,8 @@ export default function App() {
       <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      {/* Public: the signed token in the URL is the credential. */}
+      <Route path="/confirm-email" element={<ConfirmEmail />} />
 
       {/* Authenticated routes share the Layout shell */}
       <Route
