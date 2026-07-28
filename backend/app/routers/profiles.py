@@ -6,9 +6,16 @@ from fastapi import APIRouter, HTTPException, Query, UploadFile
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.trust import trust_record
 from app.models import Block, Community, Interest, Profile, User, user_interests
 from app.routers.deps import DB, CurrentUser, blocked_either_way
-from app.schemas.profile import InterestIds, ProfilePublic, ProfileRead, ProfileUpdate
+from app.schemas.profile import (
+    InterestIds,
+    ProfilePublic,
+    ProfileRead,
+    ProfileUpdate,
+    TrustRecord,
+)
 
 router = APIRouter(prefix="/api/profiles", tags=["profiles"])
 
@@ -140,3 +147,16 @@ async def read_public_profile(user_id: uuid.UUID, db: DB, user: CurrentUser):
     if profile is None:
         raise HTTPException(status_code=404, detail="Profile not found")
     return profile
+
+
+@router.get("/{user_id}/trust", response_model=TrustRecord)
+async def read_trust_record(user_id: uuid.UUID, db: DB, user: CurrentUser):
+    """A neighbor's track record, so someone weighing an offer of help can see
+    what they've actually done. Kept off the profile payload so listing and
+    searching profiles stays a single cheap query."""
+    if user_id != user.id and await blocked_either_way(db, user.id, user_id):
+        raise HTTPException(status_code=404, detail="Profile not found")
+    exists = await db.scalar(select(Profile.id).where(Profile.user_id == user_id))
+    if exists is None:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return await trust_record(db, user_id)

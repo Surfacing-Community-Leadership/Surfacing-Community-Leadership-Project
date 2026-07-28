@@ -4,6 +4,7 @@ import { api, avatarUrl } from "../api/client.js";
 import { useApi } from "../hooks/useApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { ConfirmDialog, ReportDialog } from "../components/dialogs.jsx";
+import TrustBadge from "../components/TrustBadge.jsx";
 
 function initial(name) {
   return (name || "?").trim().charAt(0).toUpperCase();
@@ -99,6 +100,10 @@ export default function PublicProfile() {
             {profile.bio}
           </p>
         )}
+        <div style={{ position: "relative" }}>
+          <TrustBadge userId={userId} />
+        </div>
+
         {status && <div className="muted" style={{ position: "relative" }}>{status}</div>}
 
         {!isMe && (
