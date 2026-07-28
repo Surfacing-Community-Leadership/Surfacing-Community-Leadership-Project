@@ -19,6 +19,21 @@ class Settings(BaseSettings):
     # Free key from developer.ticketmaster.com; only the import script needs it.
     ticketmaster_api_key: str | None = None
 
+    # --- outgoing mail (confirmation links) ------------------------------
+    # Unset in development: the confirmation link is logged to the console
+    # instead of being sent, so nothing external is required to work on this.
+    resend_api_key: str | None = None
+    email_from: str = "Ours <onboarding@resend.dev>"
+    # Where confirmation links point. In production this is the deployed origin
+    # (same origin serves the SPA); locally it's the Vite dev server.
+    public_base_url: str = "http://localhost:5173"
+
+    # --- Google sign-in ---------------------------------------------------
+    # From a Google Cloud OAuth 2.0 client. Unset disables the feature: the
+    # button is hidden and the endpoints report it as unavailable.
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
+
     @field_validator("database_url")
     @classmethod
     def _normalize_database_url(cls, v: str) -> str:

@@ -34,11 +34,14 @@ export function AuthProvider({ children }) {
     await loadUser();
   }
 
-  async function register(email, password, displayName) {
+  // `org` carries the organization fields when someone signs up as a local
+  // institution; omitted entirely for a personal account.
+  async function register(email, password, displayName, org = null) {
     await api.post("/api/auth/register", {
       email,
       password,
       display_name: displayName,
+      ...(org ? { account_type: "organization", ...org } : {}),
     });
     await login(email, password);
   }

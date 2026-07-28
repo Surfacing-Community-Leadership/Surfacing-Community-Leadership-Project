@@ -6,15 +6,35 @@ from fastapi import APIRouter, HTTPException, Query, UploadFile
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.trust import trust_record
 from app.models import Block, Community, Interest, Profile, User, user_interests
 from app.routers.deps import DB, CurrentUser, blocked_either_way
-from app.schemas.profile import InterestIds, ProfilePublic, ProfileRead, ProfileUpdate
+from app.schemas.profile import (
+    InterestIds,
+    ProfilePublic,
+    ProfileRead,
+    ProfileUpdate,
+    TrustRecord,
+)
 
 router = APIRouter(prefix="/api/profiles", tags=["profiles"])
 
 AVATAR_DIR = Path("media/avatars")
 AVATAR_TYPES = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
 MAX_AVATAR_BYTES = 2 * 1024 * 1024
+
+
+def _public(profile: Profile, verified: bool) -> ProfilePublic:
+    """ProfilePublic carries the ✓ flag, which lives on users — so it has to be
+    stitched in rather than read straight off the Profile row."""
+    return ProfilePublic(
+        **{
+            field: getattr(profile, field)
+            for field in ProfilePublic.model_fields
+            if field != "verified"
+        },
+        verified=bool(verified),
+    )
 
 
 async def _my_profile(db: AsyncSession, user: User) -> Profile:
@@ -82,9 +102,12 @@ async def search_profiles(
     i_blocked = select(Block.blocked_id).where(Block.blocker_id == user.id)
     blocked_me = select(Block.blocker_id).where(Block.blocked_id == user.id)
 
-    profiles = (
-        await db.scalars(
-            select(Profile)
+    rows = (
+        await db.execute(
+            # Joined so a verified organization is recognisable straight from
+            # search results, without a request per row.
+            select(Profile, User.org_verified)
+            .join(User, User.id == Profile.user_id)
             .where(Profile.display_name.ilike(f"%{escaped}%"))
             .where(Profile.user_id != user.id)
             .where(Profile.user_id.not_in(i_blocked))
@@ -93,7 +116,7 @@ async def search_profiles(
             .limit(20)
         )
     ).all()
-    return profiles
+    return [_public(profile, verified) for profile, verified in rows]
 
 
 @router.get("/me/interests", response_model=InterestIds)
@@ -136,7 +159,26 @@ async def read_public_profile(user_id: uuid.UUID, db: DB, user: CurrentUser):
     # endpoint already excludes blocked people; this closes the direct-URL path).
     if user_id != user.id and await blocked_either_way(db, user.id, user_id):
         raise HTTPException(status_code=404, detail="Profile not found")
-    profile = await db.scalar(select(Profile).where(Profile.user_id == user_id))
-    if profile is None:
+    row = (
+        await db.execute(
+            select(Profile, User.org_verified)
+            .join(User, User.id == Profile.user_id)
+            .where(Profile.user_id == user_id)
+        )
+    ).first()
+    if row is None:
         raise HTTPException(status_code=404, detail="Profile not found")
-    return profile
+    return _public(row[0], row[1])
+
+
+@router.get("/{user_id}/trust", response_model=TrustRecord)
+async def read_trust_record(user_id: uuid.UUID, db: DB, user: CurrentUser):
+    """A neighbor's track record, so someone weighing an offer of help can see
+    what they've actually done. Kept off the profile payload so listing and
+    searching profiles stays a single cheap query."""
+    if user_id != user.id and await blocked_either_way(db, user.id, user_id):
+        raise HTTPException(status_code=404, detail="Profile not found")
+    exists = await db.scalar(select(Profile.id).where(Profile.user_id == user_id))
+    if exists is None:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return await trust_record(db, user_id)

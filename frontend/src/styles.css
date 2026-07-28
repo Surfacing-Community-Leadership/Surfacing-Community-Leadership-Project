@@ -25,6 +25,7 @@
 
   --gathering: var(--forest); /* green marker */
   --help: var(--accent); /* terracotta marker */
+  --volunteer: #a8762b; /* amber marker — an organization's volunteer shift */
 
   --f-display: "Archivo", system-ui, -apple-system, sans-serif;
   --f-sans: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -327,6 +328,10 @@ p {
   background: color-mix(in srgb, var(--accent) 9%, var(--surface));
   transition: border-color 0.2s ease, background 0.2s ease;
 }
+.event-form.form-volunteer_work {
+  --accent: var(--volunteer);
+  --accent-deep: #8a5f1f;
+}
 .event-form.form-gathering {
   --accent: var(--forest);
   --accent-deep: var(--forest-deep);
@@ -561,6 +566,11 @@ button.danger:hover {
   color: var(--on-accent);
   border-color: var(--accent);
 }
+.tag-volunteer_work {
+  background: var(--volunteer);
+  color: var(--on-accent);
+  border-color: var(--volunteer);
+}
 .tag-category {
   background: transparent;
   color: var(--text);
@@ -718,6 +728,9 @@ button.danger:hover {
 .dot-help_request {
   background: var(--help);
 }
+.dot-volunteer_work {
+  background: var(--volunteer);
+}
 
 /* ---- Map pins ----------------------------------------------------------- */
 .pin {
@@ -749,6 +762,9 @@ button.danger:hover {
 }
 .pin-help {
   border-color: var(--accent);
+}
+.pin-volunteer {
+  border-color: var(--volunteer);
 }
 .pin-tip {
   font-family: var(--f-sans);

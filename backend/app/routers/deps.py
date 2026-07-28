@@ -37,6 +37,14 @@ def not_ended_clause(now: datetime):
     )
 
 
+def event_has_ended(event: Event, now: datetime) -> bool:
+    """Python-side mirror of not_ended_clause, for guards that need a bool
+    (e.g. you can only confirm attendance once an event is over)."""
+    if event.ends_at is not None:
+        return event.ends_at < now
+    return event.starts_at < now - timedelta(hours=DEFAULT_VISIBLE_HOURS)
+
+
 async def get_event_or_404(db: AsyncSession, event_id: uuid.UUID) -> Event:
     event = await db.get(Event, event_id)
     if event is None:
@@ -57,6 +65,13 @@ async def get_participation(
 
 async def get_my_community_id(db: AsyncSession, user_id: uuid.UUID) -> uuid.UUID | None:
     return await db.scalar(select(Profile.community_id).where(Profile.user_id == user_id))
+
+
+async def get_account_type(db: AsyncSession, user_id: uuid.UUID) -> str:
+    """'person' or 'organization' — decides which kinds of event you may post."""
+    return (
+        await db.scalar(select(Profile.account_type).where(Profile.user_id == user_id))
+    ) or "person"
 
 
 def blocked_counterparts(user_id: uuid.UUID):

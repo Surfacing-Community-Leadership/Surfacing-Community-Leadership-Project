@@ -44,7 +44,7 @@ class AdminAuth(AuthenticationBackend):
 class UserAdmin(ModelView, model=User):
     name_plural = "Users"
     icon = "fa-solid fa-user"
-    column_list = [User.email, User.is_active, User.is_verified, User.is_superuser, User.created_at]
+    column_list = [User.email, User.is_active, User.org_verified, User.is_superuser, User.created_at]
     column_searchable_list = [User.email]
     column_details_exclude_list = [User.hashed_password]
     form_excluded_columns = [User.hashed_password, User.created_at]
@@ -54,8 +54,20 @@ class UserAdmin(ModelView, model=User):
 class ProfileAdmin(ModelView, model=Profile):
     name_plural = "Profiles"
     icon = "fa-solid fa-id-card"
-    column_list = [Profile.display_name, Profile.user_id, Profile.community_id]
-    column_searchable_list = [Profile.display_name]
+    # Org columns first: this list is the review queue for verification
+    # requests. Check org_website, then grant the badge on the Users view by
+    # ticking org_verified.
+    column_list = [
+        Profile.display_name,
+        Profile.account_type,
+        Profile.org_category,
+        Profile.org_website,
+        Profile.org_contact_name,
+        Profile.org_contact_role,
+        Profile.user_id,
+        Profile.community_id,
+    ]
+    column_searchable_list = [Profile.display_name, Profile.account_type]
     form_excluded_columns = [Profile.created_at, Profile.updated_at]
     can_create = False
 

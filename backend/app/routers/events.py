@@ -8,7 +8,15 @@ from sqlalchemy import and_, func, or_, select
 from app.core.area_import import maybe_schedule_area_import
 from app.core.geo import to_latlng, wkt_point
 from app.core.notifications import notify
-from app.models import Community, Event, EventParticipant, Interest, user_interests
+from app.models import (
+    Community,
+    Event,
+    EventParticipant,
+    Interest,
+    OrgFollow,
+    Profile,
+    user_interests,
+)
 from app.routers.deps import (
     ACTIVE_PARTICIPANT_STATUSES,
     ALLOWED_STATUS_TRANSITIONS,
@@ -16,6 +24,7 @@ from app.routers.deps import (
     DB,
     CurrentUser,
     blocked_counterparts,
+    get_account_type,
     get_event_or_404,
     get_my_community_id,
     get_participation,
@@ -78,6 +87,64 @@ async def _resolve_tag(db, tag_id) -> Interest | None:
     if tag is None:
         raise HTTPException(status_code=422, detail="Unknown tag")
     return tag
+
+
+async def _notify_followers(db, event: Event) -> None:
+    """Tell an organization's followers about something it just posted.
+
+    Scoped to what each follower could actually open:
+      * private       — nobody; it's invite-only by definition.
+      * community     — only followers in that same community.
+      * public        — every follower.
+    notify() already skips self-pings and anyone with a block either way.
+    """
+    if event.visibility == "private" or event.host_id is None:
+        return
+    if await get_account_type(db, event.host_id) != "organization":
+        return
+
+    follower_ids = select(OrgFollow.follower_id).where(OrgFollow.org_id == event.host_id)
+    if event.visibility == "community":
+        if event.community_id is None:
+            return
+        # Narrow to followers who belong to the event's community.
+        follower_ids = follower_ids.where(
+            OrgFollow.follower_id.in_(
+                select(Profile.user_id).where(Profile.community_id == event.community_id)
+            )
+        )
+
+    for follower_id in (await db.scalars(follower_ids)).all():
+        await notify(
+            db,
+            user_id=follower_id,
+            type="org_event",
+            actor_id=event.host_id,
+            event_id=event.id,
+        )
+
+
+async def _require_kind_allowed(db, user, kind: str) -> None:
+    """Organizations and individuals ask for hands in different ways.
+
+    A person posts a help_request — a personal favour from a neighbour. An
+    organization posts volunteer_work — an institutional shift many people can
+    join. Each is offered only the one that fits, so the map stays honest about
+    what a listing actually is.
+    """
+    if kind == "gathering":
+        return
+    account_type = await get_account_type(db, user.id)
+    if kind == "volunteer_work" and account_type != "organization":
+        raise HTTPException(
+            status_code=403,
+            detail="Only organization accounts can post volunteer work",
+        )
+    if kind == "help_request" and account_type == "organization":
+        raise HTTPException(
+            status_code=403,
+            detail="Organizations post volunteer work rather than help requests",
+        )
 
 
 async def _validate_community(db, community_id) -> None:
@@ -172,6 +239,7 @@ async def discover_events(
 
 @router.post("", response_model=EventSummary, status_code=201)
 async def create_event(payload: EventCreate, db: DB, user: CurrentUser):
+    await _require_kind_allowed(db, user, payload.kind)
     await _validate_community(db, payload.community_id)
     tag = await _resolve_tag(db, payload.tag_id)
 
@@ -195,6 +263,9 @@ async def create_event(payload: EventCreate, db: DB, user: CurrentUser):
         capacity=payload.capacity,
     )
     db.add(event)
+    # flush so the event has an id to reference before the notifications are staged
+    await db.flush()
+    await _notify_followers(db, event)
     await db.commit()
     # Reload the server-default status and the location as a proper geometry
     # (we assigned it as a WKT string). Naming attributes avoids re-expiring —

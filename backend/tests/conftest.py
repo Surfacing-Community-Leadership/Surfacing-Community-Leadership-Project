@@ -94,6 +94,48 @@ async def make_user():
 
 
 @pytest.fixture
+async def make_org():
+    """Factory: a *verified* organization account, signed in.
+
+    Registers on a gated domain and clicks the confirmation link, since that is
+    what actually grants the ✓ badge — see app/core/orgs.py.
+        parks = await make_org("parks@ci.brooklyn.gov", "Parks Dept")
+    """
+    from app.core.email import make_confirm_token
+
+    clients = []
+
+    async def factory(email, name="An Organization", category="parks", password="password-123"):
+        c = AsyncClient(transport=ASGITransport(app=app), base_url=BASE_URL)
+        clients.append(c)
+        r = await c.post(
+            "/api/auth/register",
+            json={
+                "email": email,
+                "password": password,
+                "display_name": name,
+                "account_type": "organization",
+                "org_category": category,
+                "org_website": "https://example.org",
+            },
+        )
+        assert r.status_code == 201, r.text
+        created = r.json()
+        r = await c.post("/api/auth/login", json={"email": email, "password": password})
+        assert r.status_code == 204, r.text
+        c.headers["X-CSRF-Token"] = c.cookies.get("ours_csrf")
+        r = await c.post(
+            "/api/auth/confirm-email", json={"token": make_confirm_token(created["id"])}
+        )
+        assert r.status_code == 200, r.text
+        return c
+
+    yield factory
+    for c in clients:
+        await c.aclose()
+
+
+@pytest.fixture
 async def interest_id():
     """Insert one interest directly (there is no API to create them)."""
     from app.models import Interest

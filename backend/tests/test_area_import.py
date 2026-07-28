@@ -139,3 +139,24 @@ async def test_no_key_means_no_scheduling(make_user, monkeypatch):
     await viewer.get(NEARBY)
     async with AsyncSessionLocal() as session:
         assert await session.get(ImportArea, tile_key(40.6552, -74.0069)) is None
+
+def test_seed_demo_clears_the_import_ledger_with_events():
+    """seed_demo truncates events, so it must clear import_areas too.
+
+    Leaving tiles marked 'done' for events that were just deleted makes the
+    importer skip those areas for FRESH_FOR (24h), so the map shows no imported
+    events at all — which is exactly what happened once.
+    """
+    from pathlib import Path
+
+    source = (
+        Path(__file__).resolve().parents[1] / "scripts" / "seed_demo.py"
+    ).read_text()
+    start = source.index("TRUNCATE")
+    statement = source[start : source.index(")", start)]
+
+    assert "events" in statement
+    assert "import_areas" in statement, (
+        "seed_demo must truncate import_areas alongside events, or the map "
+        "loses its imported events for a day"
+    )
