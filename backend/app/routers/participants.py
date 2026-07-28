@@ -297,13 +297,18 @@ async def say_thanks(
     """
     event = await get_event_or_404(db, event_id)
 
-    if event.kind != "help_request":
+    # Both shapes of "someone lent a hand": a neighbour's help request, and an
+    # organization's volunteer shift. Either way the person who *received* the
+    # help confirms it, never the helper.
+    if event.kind not in ("help_request", "volunteer_work"):
         raise HTTPException(
-            status_code=409, detail="Thanks are for help requests"
+            status_code=409,
+            detail="Thanks are for help requests and volunteer work",
         )
     if event.host_id != user.id:
         raise HTTPException(
-            status_code=403, detail="Only the neighbor who asked can say thanks"
+            status_code=403,
+            detail="Only the neighbor or organization who asked can say thanks",
         )
     if not event_has_ended(event, datetime.now(timezone.utc)):
         raise HTTPException(

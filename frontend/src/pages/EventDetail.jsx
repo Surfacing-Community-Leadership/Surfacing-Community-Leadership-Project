@@ -5,6 +5,7 @@ import { useApi } from "../hooks/useApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { ConfirmDialog, ReportDialog } from "../components/dialogs.jsx";
 import { tagIcon } from "../lib/tagIcons.js";
+import { isHelpKind, kindLabel } from "../lib/eventKinds.js";
 
 const ACTIVE = ["invited", "going", "maybe", "attended"];
 // Mirrors the backend: without an end time an event is assumed to run 3 hours.
@@ -105,9 +106,7 @@ export default function EventDetail() {
         <div style={{ display: "flex", flexDirection: "column", gap: "20px", minWidth: 0 }}>
           <section className="card" style={{ padding: "30px", gap: "16px", marginBottom: 0 }}>
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-              <span className={`tag tag-${event.kind}`}>
-                {event.kind === "help_request" ? "Help request" : "Gathering"}
-              </span>
+              <span className={`tag tag-${event.kind}`}>{kindLabel(event.kind)}</span>
               {event.tag_name && (
                 <span className="tag tag-category">
                   {tagIcon(event.tag_slug)} {event.tag_name}
@@ -220,8 +219,12 @@ export default function EventDetail() {
               ✓ You confirmed you were here — it counts toward your record.
             </p>
           )}
-          {ended && isHost && event.kind === "help_request" && (
-            <ThanksPanel eventId={id} participants={participants} />
+          {ended && isHost && isHelpKind(event.kind) && (
+            <ThanksPanel
+              eventId={id}
+              participants={participants}
+              volunteer={event.kind === "volunteer_work"}
+            />
           )}
 
           {canParticipate && <Messages eventId={id} />}
@@ -290,7 +293,7 @@ function AttendanceCard({ eventId, onDone }) {
 
 // Only the neighbor who asked for help can confirm who actually helped, which
 // is what makes the "helped" count on a profile worth anything.
-function ThanksPanel({ eventId, participants }) {
+function ThanksPanel({ eventId, participants, volunteer = false }) {
   const { data: thanked, reload } = useApi(
     () => api.get(`/api/events/${eventId}/thanks`),
     [eventId],
@@ -319,9 +322,13 @@ function ThanksPanel({ eventId, participants }) {
 
   return (
     <section className="card">
-      <h2 style={{ fontSize: "20px", margin: 0 }}>Who helped you out?</h2>
+      <h2 style={{ fontSize: "20px", margin: 0 }}>
+        {volunteer ? "Who volunteered?" : "Who helped you out?"}
+      </h2>
       <p className="muted" style={{ margin: 0 }}>
-        Saying thanks adds to their record — and sends them your note.
+        {volunteer
+          ? "Confirming adds to each volunteer's record — and sends them your note."
+          : "Saying thanks adds to their record — and sends them your note."}
       </p>
       {error && <div className="alert">{error}</div>}
       <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "12px" }}>
@@ -337,14 +344,14 @@ function ThanksPanel({ eventId, participants }) {
                   {p.display_name}
                 </span>
                 {already ? (
-                  <span className="muted">✓ Thanked</span>
+                  <span className="muted">{volunteer ? "✓ Confirmed" : "✓ Thanked"}</span>
                 ) : (
                   <button
                     className="secondary"
                     style={{ fontSize: "12px", padding: "6px 14px" }}
                     onClick={() => setOpenFor(openFor === p.user_id ? null : p.user_id)}
                   >
-                    Say thanks
+                    {volunteer ? "Confirm" : "Say thanks"}
                   </button>
                 )}
               </div>
@@ -359,7 +366,9 @@ function ThanksPanel({ eventId, participants }) {
                     aria-label="Thank-you note"
                   />
                   <div className="row-actions" style={{ marginTop: 0 }}>
-                    <button onClick={() => send(p.user_id)}>Send thanks</button>
+                    <button onClick={() => send(p.user_id)}>
+                      {volunteer ? "Confirm volunteer" : "Send thanks"}
+                    </button>
                     <button className="link-button" onClick={() => setOpenFor(null)}>
                       Cancel
                     </button>

@@ -6,7 +6,9 @@ from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.common import LatLng
 
-EventKind = Literal["gathering", "help_request"]
+# volunteer_work is organization-only (enforced in routers/events.py); a
+# help_request is a person asking a neighbour for a hand.
+EventKind = Literal["gathering", "help_request", "volunteer_work"]
 EventVisibility = Literal["public", "community", "private"]
 EventStatus = Literal["open", "full", "cancelled", "completed"]
 

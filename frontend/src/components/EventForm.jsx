@@ -6,6 +6,7 @@ import LocationPicker from "./LocationPicker.jsx";
 import AddressAutocomplete from "./AddressAutocomplete.jsx";
 import { useGeolocation } from "../hooks/useGeolocation.js";
 import { tagIcon } from "../lib/tagIcons.js";
+import { kindLabel, kindsFor } from "../lib/eventKinds.js";
 
 // The current local wall-clock time as "YYYY-MM-DDTHH:MM" for a datetime-local
 // input's `min`.
@@ -28,6 +29,9 @@ export default function EventForm({
   const here = useGeolocation();
   const minStart = enforceFutureStart ? localNow() : undefined;
   const { data: interests } = useApi(() => api.get("/api/interests"));
+  // Organizations recruit volunteers; individuals ask a neighbour for a hand.
+  const { data: myProfile } = useApi(() => api.get("/api/profiles/me"));
+  const available = kindsFor(myProfile?.account_type);
 
   const [kind, setKind] = useState(initial.kind ?? "gathering");
   const [title, setTitle] = useState(initial.title ?? "");
@@ -43,6 +47,12 @@ export default function EventForm({
   const [submitting, setSubmitting] = useState(false);
 
   const mapCenter = location ? [location.lat, location.lng] : here;
+
+  // Snap to an allowed kind once the account type arrives — an organization
+  // must never be left holding "help_request".
+  if (myProfile && !lockKind && !available.includes(kind)) {
+    setKind(available[0]);
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -73,7 +83,7 @@ export default function EventForm({
 
   return (
     <form
-      className={`card event-form ${kind === "help_request" ? "form-help" : "form-gathering"}`}
+      className={`card event-form form-${kind}`}
       onSubmit={handleSubmit}
       style={{ gap: "22px", padding: "30px" }}
     >
@@ -83,30 +93,26 @@ export default function EventForm({
         <span className="field-label">Type</span>
         {lockKind ? (
           <div className="pill-tabs">
-            <span className="pill-tab on">
-              {kind === "help_request" ? "Help request" : "Gathering"}
-            </span>
+            <span className="pill-tab on">{kindLabel(kind)}</span>
           </div>
         ) : (
           <div className="pill-tabs">
-            <button
-              type="button"
-              className={kind === "gathering" ? "pill-tab on" : "pill-tab"}
-              onClick={() => setKind("gathering")}
-            >
-              Gathering
-            </button>
-            <button
-              type="button"
-              className={kind === "help_request" ? "pill-tab on" : "pill-tab"}
-              onClick={() => setKind("help_request")}
-            >
-              Help request
-            </button>
+            {available.map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={kind === option ? "pill-tab on" : "pill-tab"}
+                onClick={() => setKind(option)}
+              >
+                {kindLabel(option)}
+              </button>
+            ))}
           </div>
         )}
         <span className="field-hint">
-          Bring people together, or ask a neighbor for a hand.
+          {myProfile?.account_type === "organization"
+            ? "Bring people together, or recruit volunteers for a shift."
+            : "Bring people together, or ask a neighbor for a hand."}
         </span>
       </div>
 

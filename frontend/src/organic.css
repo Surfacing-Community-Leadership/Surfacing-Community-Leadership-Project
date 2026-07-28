@@ -464,6 +464,11 @@
   background: var(--color-accent-2-100);
   color: var(--color-accent-2-800);
 }
+/* Volunteer work sits between the two: neutral-warm, clearly its own thing. */
+.org .tag-volunteer_work {
+  background: #f5e6c8;
+  color: #6b4a15;
+}
 .org .tag-category,
 .org .tag-neutral {
   background: var(--color-neutral-100);
@@ -886,6 +891,14 @@
    a help request (matches the map's gathering/help colors). */
 .org .event-form {
   background: color-mix(in srgb, var(--color-accent) 7%, var(--color-surface));
+}
+.org .event-form.form-volunteer_work {
+  --color-accent: #a8762b;
+  --color-accent-600: #8a5f1f;
+  --color-accent-700: #6b4a15;
+  --color-accent-100: #f8eed8;
+  --color-accent-200: #f0dcb4;
+  --color-accent-800: #55390f;
 }
 .org .event-form.form-gathering {
   --color-accent: var(--color-accent-2);

@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { api } from "../api/client.js";
 import { useApi } from "../hooks/useApi.js";
+import { kindLabel } from "../lib/eventKinds.js";
 
 function formatWhen(iso) {
   return new Date(iso).toLocaleString([], {
@@ -75,7 +76,7 @@ function EventGrid({ events, showAdd }) {
   return (
     <div className="card-grid">
       {events.map((e) => {
-        const help = e.kind === "help_request";
+
         const status =
           e.my_rsvp && e.my_rsvp !== "attended"
             ? e.my_rsvp === "maybe"
@@ -87,9 +88,7 @@ function EventGrid({ events, showAdd }) {
         return (
           <Link key={e.id} to={`/events/${e.id}`} className="card ev-card">
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-              <span className={`tag tag-${e.kind}`}>
-                {help ? "Help request" : "Gathering"}
-              </span>
+              <span className={`tag tag-${e.kind}`}>{kindLabel(e.kind)}</span>
               {e.tag_name && <span className="tag tag-neutral">{e.tag_name}</span>}
             </div>
             <h3>{e.title}</h3>

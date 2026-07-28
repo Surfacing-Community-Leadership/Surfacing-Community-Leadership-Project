@@ -11,6 +11,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import L from "leaflet";
 import { tagIcon } from "../lib/tagIcons.js";
+import { kindLabel } from "../lib/eventKinds.js";
 
 // Markers: a circle whose border color is the event kind (green gathering /
 // orange help) with the tag's emoji in the middle — so one pin conveys both.
@@ -30,7 +31,8 @@ function pinIcon(kind, tagSlug) {
   const key = `${kind}|${tagSlug || ""}`;
   let icon = iconCache.get(key);
   if (!icon) {
-    const suffix = kind === "help_request" ? "help" : "gathering";
+    const suffix =
+      kind === "help_request" ? "help" : kind === "volunteer_work" ? "volunteer" : "gathering";
     icon = L.divIcon({
       className: "pin-wrap",
       html: `<span class="pin pin-${suffix}"><span class="pin-emoji">${tagIcon(tagSlug)}</span></span>`,
@@ -40,10 +42,6 @@ function pinIcon(kind, tagSlug) {
     iconCache.set(key, icon);
   }
   return icon;
-}
-
-function kindLabel(kind) {
-  return kind === "help_request" ? "Help request" : "Gathering";
 }
 
 function formatWhen(iso) {

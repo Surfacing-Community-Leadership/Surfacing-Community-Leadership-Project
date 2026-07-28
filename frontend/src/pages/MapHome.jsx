@@ -5,6 +5,7 @@ import { useApi } from "../hooks/useApi.js";
 import MapView from "../components/MapView.jsx";
 import { useGeolocation } from "../hooks/useGeolocation.js";
 import { tagIcon } from "../lib/tagIcons.js";
+import { kindLabel } from "../lib/eventKinds.js";
 
 export default function MapHome() {
   const center = useGeolocation(); // [lat, lng]; null until located
@@ -87,6 +88,7 @@ export default function MapHome() {
             <option value="">All types</option>
             <option value="gathering">Gatherings</option>
             <option value="help_request">Help requests</option>
+            <option value="volunteer_work">Volunteer work</option>
           </select>
           <select value={category} onChange={(e) => setCategory(e.target.value)}>
             <option value="mine">✨ For you</option>
@@ -118,7 +120,7 @@ export default function MapHome() {
                   <span className="event-list-body">
                     <strong>{ev.title}</strong>
                     <span className="muted">
-                      {ev.source === "imported" ? "Around town ↗" : ev.kind === "help_request" ? "Help request" : "Gathering"}
+                      {ev.source === "imported" ? "Around town ↗" : kindLabel(ev.kind)}
                       {ev.tag_name && ` · ${ev.tag_name}`}
                       {ev.distance_m != null && ` · ${formatDistance(ev.distance_m)}`}
                     </span>
