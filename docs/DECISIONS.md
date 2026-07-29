@@ -335,6 +335,28 @@ superseded.
   address discards its coordinates, and ticking the pin box later reuses them if
   they're still valid.
 
+## Revisions — 2026-07-29, round four (editing your own post)
+
+- **Authors can now edit everything they wrote**, including the post type. This
+  *reverses* the earlier "the type is fixed after posting" rule from round two.
+  That was my own conservative call, not a requirement — the stated reason (people
+  may have already read it) doesn't justify making someone delete and repost to
+  fix a mis-picked type, which is an ordinary mistake.
+- **The type is re-validated on edit.** Without it, relabelling would be a way
+  around the organization gate entirely: a person could post a `giveaway` and
+  then PATCH it to `announcement`. `test_editing_cannot_promote_a_post_to_an_organization_type`
+  covers it.
+- **`NoticeUpdate` needed its own category validator.** `NoticeCreate` had one;
+  the update schema didn't, so a retired type like `offer_help` slipped past
+  validation and hit the router's account-type check, which answered "that post
+  type is for verified organization accounts" — true of neither and actively
+  misleading. Found by a test that asserted 422 and got 403.
+- **Editing never touches the expiry unless asked.** The form's expiry selector
+  defaults to "Leave as it is — N days left" and the payload omits `expires_at`
+  entirely in that case, so fixing a typo can't silently restart a post's clock.
+- **Stars and replies survive an edit** untouched, asserted by a test — an edit
+  changes the words, not the post's history.
+
 ## Deferred (known gaps to discuss)
 
 - Rate limiting is in the stack but still not wired.

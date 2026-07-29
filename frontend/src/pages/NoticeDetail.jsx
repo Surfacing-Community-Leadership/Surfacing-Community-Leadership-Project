@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client.js";
 import { useApi } from "../hooks/useApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
+import NoticeForm from "../components/NoticeForm.jsx";
 import StarButton from "../components/StarButton.jsx";
 import { categoryLabel, timeLeft } from "../lib/noticeCategories.js";
 
@@ -98,12 +99,16 @@ export default function NoticeDetail() {
   );
 }
 
-// The author's side: who answered, and the controls to wrap it up.
+// The author's side: who answered, and the controls to change or wrap it up.
 function AuthorView({ notice, onChanged, onDeleted }) {
   const { data: replies, error, loading, reload } = useApi(
     () => api.get(`/api/notices/${notice.id}/replies`),
     [notice.id],
   );
+  // The board's meta drives the form: which types this account may use, the
+  // expiry windows, the body limit. The server owns all three.
+  const { data: meta } = useApi(() => api.get("/api/notices/meta"));
+  const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState(null);
 
@@ -119,11 +124,32 @@ function AuthorView({ notice, onChanged, onDeleted }) {
     }
   }
 
+  if (editing) {
+    if (!meta) return <p className="muted">Loading…</p>;
+    return (
+      <NoticeForm
+        meta={meta}
+        existing={notice}
+        submitLabel="Save changes"
+        savingLabel="Saving…"
+        onCancel={() => setEditing(false)}
+        onSubmit={async (payload) => {
+          await api.patch(`/api/notices/${notice.id}`, payload);
+          setEditing(false);
+          await onChanged();
+        }}
+      />
+    );
+  }
+
   return (
     <>
       <div className="notice-owner-bar">
         {actionError && <div className="alert">{actionError}</div>}
         <div className="row-actions">
+          <button className="btn btn-secondary" onClick={() => setEditing(true)}>
+            Edit
+          </button>
           {notice.resolved ? (
             <button
               className="btn btn-secondary"

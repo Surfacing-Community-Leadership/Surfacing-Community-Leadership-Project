@@ -505,9 +505,15 @@ async def read_notice(notice_id: uuid.UUID, db: DB, user: CurrentUser):
 async def update_notice(
     notice_id: uuid.UUID, payload: NoticeUpdate, db: DB, user: CurrentUser
 ):
-    """Edit your own notice, extend it, move its pin, or mark it done. The post
-    type is fixed after posting — changing it would rewrite what neighbors
-    already read and replied to."""
+    """Edit your own post: its type, words, whereabouts, pin, expiry, whether it
+    takes replies, and whether it's done.
+
+    Everything an author wrote is editable, including the type — a mis-picked
+    type is a normal mistake and there's no reason to make someone delete and
+    repost to fix it. What is NOT editable is who it belongs to or the fact that
+    it exists, and the type is re-checked against the account so a person can't
+    relabel their post as an official announcement.
+    """
     now = datetime.now(timezone.utc)
     notice = await db.get(Notice, notice_id)
     if notice is None:
@@ -519,6 +525,15 @@ async def update_notice(
     resolved = updates.pop("resolved", None)
     clear_location = updates.pop("clear_location", False)
     new_location = updates.pop("location", None)
+
+    new_category = updates.get("category")
+    if new_category is not None and not is_category_allowed(
+        await get_account_type(db, user.id), new_category
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="That post type is for verified organization accounts",
+        )
 
     # Checked before anything is mutated: putting a notice back on the board
     # spends allowance, and the guard has to run while the row still counts as

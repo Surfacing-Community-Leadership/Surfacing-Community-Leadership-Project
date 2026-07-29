@@ -1002,3 +1002,130 @@ async def test_paging_past_the_end_is_empty_not_an_error(board_user):
     r = await author.get("/api/notices?limit=6&offset=60")
     assert r.status_code == 200
     assert r.json() == []
+
+
+# ---- editing your own post -------------------------------------------------
+
+
+async def test_an_author_can_edit_the_words(board_user):
+    author = await board_user("author@example.com")
+    notice_id = (await author.post("/api/notices", json=notice_payload())).json()["id"]
+
+    r = await author.patch(
+        f"/api/notices/{notice_id}",
+        json={
+            "title": "Free bookshelf — now with shelves",
+            "body": "Corrected: it's three shelves, not two. Still on the stoop.",
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["title"] == "Free bookshelf — now with shelves"
+    assert "three shelves" in r.json()["body"]
+
+    # And the change is what other people see.
+    reader = await board_user("reader@example.com")
+    board = (await reader.get("/api/notices")).json()
+    assert board[0]["title"] == "Free bookshelf — now with shelves"
+
+
+async def test_an_author_can_correct_a_mis_picked_post_type(board_user):
+    """A wrong type is a normal mistake; nobody should have to delete and repost
+    to fix it."""
+    author = await board_user("author@example.com")
+    notice_id = (
+        await author.post("/api/notices", json=notice_payload(category="giveaway"))
+    ).json()["id"]
+
+    r = await author.patch(f"/api/notices/{notice_id}", json={"category": "question"})
+    assert r.status_code == 200, r.text
+    assert r.json()["category"] == "question"
+
+
+async def test_editing_cannot_promote_a_post_to_an_organization_type(board_user):
+    """The type is re-checked on edit, or relabelling would be a way around the
+    organization gate entirely."""
+    author = await board_user("author@example.com")
+    notice_id = (await author.post("/api/notices", json=notice_payload())).json()["id"]
+
+    r = await author.patch(
+        f"/api/notices/{notice_id}", json={"category": "announcement"}
+    )
+    assert r.status_code == 403
+    assert "organization" in r.json()["message"].lower()
+    # Unchanged, not partially applied.
+    assert (await author.get(f"/api/notices/{notice_id}")).json()["category"] == "giveaway"
+
+
+async def test_editing_cannot_use_a_retired_post_type(board_user):
+    author = await board_user("author@example.com")
+    notice_id = (await author.post("/api/notices", json=notice_payload())).json()["id"]
+    r = await author.patch(f"/api/notices/{notice_id}", json={"category": "offer_help"})
+    assert r.status_code == 422
+
+
+async def test_an_author_can_edit_the_whereabouts_and_the_pin(board_user):
+    author = await board_user("author@example.com")
+    notice_id = (await author.post("/api/notices", json=notice_payload())).json()["id"]
+    assert (await author.get(f"/api/notices/{notice_id}")).json()["location"] is None
+
+    r = await author.patch(
+        f"/api/notices/{notice_id}",
+        json={"place_hint": "The bench by the playground", "location": SUNSET_PARK},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["place_hint"] == "The bench by the playground"
+    assert abs(r.json()["location"]["lat"] - SUNSET_PARK["lat"]) < 1e-6
+
+
+async def test_editing_leaves_the_expiry_alone_when_it_is_not_sent(board_user):
+    """The edit form defaults to "leave as it is", so a typo fix must not
+    silently restart the clock."""
+    author = await board_user("author@example.com")
+    soon = datetime.now(timezone.utc) + timedelta(days=3)
+    created = (
+        await author.post(
+            "/api/notices", json=notice_payload(expires_at=soon.isoformat())
+        )
+    ).json()
+
+    r = await author.patch(f"/api/notices/{created['id']}", json={"title": "Fixed typo"})
+    assert r.status_code == 200
+    assert r.json()["expires_at"] == created["expires_at"]
+
+
+async def test_an_edit_does_not_disturb_stars_or_replies(board_user):
+    author = await board_user("author@example.com")
+    fan = await board_user("fan@example.com")
+    notice_id = (await author.post("/api/notices", json=notice_payload())).json()["id"]
+    await fan.put(f"/api/notices/{notice_id}/star")
+    await fan.post(f"/api/notices/{notice_id}/replies", json={"body": "Still going?"})
+
+    r = await author.patch(f"/api/notices/{notice_id}", json={"title": "Reworded"})
+    assert r.status_code == 200
+    assert r.json()["stars"] == 1
+    assert r.json()["reply_count"] == 1
+    assert len((await author.get(f"/api/notices/{notice_id}/replies")).json()) == 1
+
+
+async def test_a_neighbor_cannot_edit_someone_elses_post(board_user):
+    author = await board_user("author@example.com")
+    meddler = await board_user("meddler@example.com")
+    notice_id = (await author.post("/api/notices", json=notice_payload())).json()["id"]
+
+    r = await meddler.patch(f"/api/notices/{notice_id}", json={"title": "Mine now"})
+    assert r.status_code == 403
+    assert (await author.get(f"/api/notices/{notice_id}")).json()["title"] == "Free bookshelf"
+
+
+async def test_an_organization_can_edit_between_its_own_types(make_org, community_id):
+    library = await make_org("library@brooklyn.gov", "Sunset Park Library")
+    await library.patch("/api/profiles/me", json={"community_id": community_id})
+    notice_id = (
+        await library.post("/api/notices", json=notice_payload(category="announcement"))
+    ).json()["id"]
+
+    r = await library.patch(
+        f"/api/notices/{notice_id}", json={"category": "service_change"}
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["category"] == "service_change"

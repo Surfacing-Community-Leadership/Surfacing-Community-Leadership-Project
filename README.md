@@ -59,7 +59,9 @@ If we succeed, people need the app less and less over time. That's the point.
   gets five live posts at a time, replies go privately to whoever posted and only
   if they left inquiries open, and there are **no comment threads anywhere**.
   Whereabouts suggests addresses as you type, and picking one drops the map pin
-  there automatically.
+  there automatically. Authors can edit their own posts — words, type,
+  whereabouts, pin and expiry — without losing the stars or replies they've
+  already collected.
   A star marks a post as useful — counted as an anonymous aggregate, never as a
   list of names, and one highlighted "post of the day" rotates on a 24-hour
   window rather than accumulating. There is no crime-and-safety type, which is a

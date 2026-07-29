@@ -2,19 +2,10 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client.js";
 import { useApi } from "../hooks/useApi.js";
-import AddressAutocomplete from "../components/AddressAutocomplete.jsx";
 import CommunityPicker from "../components/CommunityPicker.jsx";
-import LocationPicker from "../components/LocationPicker.jsx";
+import NoticeForm from "../components/NoticeForm.jsx";
 import StarButton from "../components/StarButton.jsx";
-import { useGeolocation } from "../hooks/useGeolocation.js";
-import {
-  categoryHint,
-  categoryLabel,
-  categoryShort,
-  isLongForm,
-  suggestsPin,
-  timeLeft,
-} from "../lib/noticeCategories.js";
+import { categoryShort, isLongForm, timeLeft } from "../lib/noticeCategories.js";
 
 // The community board: things worth knowing that aren't invitations. Anything
 // you can show up to is an event and lives on the map instead.
@@ -299,236 +290,24 @@ function NoticeCard({ notice }) {
   );
 }
 
+// A thin wrapper: the form itself is shared with the edit screen so the two can
+// never drift apart.
 function ComposeNotice({ meta, onPosted, onCancel }) {
-  const categories = meta.categories;
-  const here = useGeolocation();
-  const [category, setCategory] = useState(categories[0] || "giveaway");
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-  const [placeHint, setPlaceHint] = useState("");
-  // Coordinates of the address the author picked from the suggestions, kept
-  // apart from `location` so ticking the pin box later can still use them.
-  const [addressPoint, setAddressPoint] = useState(null);
-  const [expiryDays, setExpiryDays] = useState(meta.default_expiry_days);
-  const [allowInquiries, setAllowInquiries] = useState(true);
-  const [pinned, setPinned] = useState(false);
-  const [location, setLocation] = useState(null);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
-  // Follow the pin once it's placed, so fine-tuning doesn't fight the map.
-  const mapCenter = location ? [location.lat, location.lng] : here;
-
-  async function submit(event) {
-    event.preventDefault();
-    setSaving(true);
-    setError(null);
-    try {
-      const expires = new Date();
-      expires.setDate(expires.getDate() + Number(expiryDays));
-      await api.post("/api/notices", {
-        category,
-        title,
-        body,
-        place_hint: placeHint || null,
-        location: pinned ? location : null,
-        allow_direct_inquiries: allowInquiries,
-        expires_at: expires.toISOString(),
-      });
-      await onPosted();
-    } catch (err) {
-      setError(err.message);
-      setSaving(false);
-    }
-  }
-
   return (
-    <form className={`notice-form form-${category}`} onSubmit={submit}>
-      <h2>Write a post</h2>
-      {error && <div className="alert">{error}</div>}
-
-      <div className="field">
-        <label className="field-label" htmlFor="notice-category">
-          What kind of post
-        </label>
-        <select
-          id="notice-category"
-          className="input"
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-        >
-          {categories.map((key) => (
-            <option key={key} value={key}>
-              {categoryLabel(key)}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="field">
-        <label className="field-label" htmlFor="notice-title">
-          Headline
-        </label>
-        <input
-          id="notice-title"
-          className="input"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          maxLength={140}
-          placeholder="Free bookshelf"
-          required
-        />
-      </div>
-
-      <div className="field">
-        <label className="field-label" htmlFor="notice-body">
-          Details
-        </label>
-        <textarea
-          id="notice-body"
-          className="input"
-          rows={isLongForm(category) ? 10 : 4}
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          maxLength={meta.max_body_chars}
-          required
-        />
-        <p className="field-hint">
-          {categoryHint(category)}
-          {isLongForm(category) && (
-            <>
-              {" "}
-              <span className="muted">
-                {body.length}/{meta.max_body_chars}
-              </span>
-            </>
-          )}
-        </p>
-      </div>
-
-      <div className="field">
-        <label className="field-label" htmlFor="notice-place">
-          Whereabouts <span className="muted">(optional)</span>
-        </label>
-        {/* Suggests addresses but doesn't insist on one: "the bench by the
-            playground" is often more use to a neighbour, and free text still
-            works. Picking a suggestion is what gives us coordinates. */}
-        <AddressAutocomplete
-          value={placeHint}
-          onChange={(text) => {
-            setPlaceHint(text);
-            // Typing over a chosen address invalidates its coordinates.
-            setAddressPoint(null);
-          }}
-          onSelect={({ address, lat, lng }) => {
-            setPlaceHint(address);
-            const point = { lat, lng };
-            setAddressPoint(point);
-            // Placing the pin at the address is the whole point of picking one,
-            // so it lands immediately — and it's still draggable by clicking
-            // the map, since an address is often only approximately the spot.
-            setLocation(point);
-            setPinned(true);
-          }}
-          center={here ? { lat: here[0], lng: here[1] } : undefined}
-        />
-        <p className="field-hint">
-          Pick a suggestion to place the map pin automatically, or just describe
-          it — a landmark often reads better than an address.
-        </p>
-      </div>
-
-      <div className="field">
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={pinned}
-            onChange={(e) => {
-              const on = e.target.checked;
-              setPinned(on);
-              // Ticking the box after choosing an address reuses that address
-              // rather than making the author hunt for the spot again.
-              if (on && !location && addressPoint) setLocation(addressPoint);
-            }}
-          />
-          Also drop a pin on the map
-          {suggestsPin(category) && <span className="muted"> — useful for this kind</span>}
-        </label>
-        {pinned && (
-          <>
-            {/* LocationPicker needs an explicit centre — Leaflet can't
-                initialise a view without one, and the map renders blank. */}
-            {mapCenter ? (
-              <div className="picker-map">
-                <LocationPicker
-                  center={mapCenter}
-                  value={location}
-                  onPick={setLocation}
-                />
-              </div>
-            ) : (
-              <div className="picker-map centered muted">Locating…</div>
-            )}
-            <p className="field-hint">
-              {addressPoint && location
-                ? "Placed at the address you picked — click the map to nudge it."
-                : "Click the map to place it."}{" "}
-              Informational only — it appears as a muted pin so nobody mistakes
-              it for something to attend.
-            </p>
-          </>
-        )}
-      </div>
-
-      <div className="field">
-        <label className="field-label" htmlFor="notice-expiry">
-          Take it down after
-        </label>
-        <select
-          id="notice-expiry"
-          className="input"
-          value={expiryDays}
-          onChange={(e) => setExpiryDays(e.target.value)}
-        >
-          {meta.expiry_choices_days.map((days) => (
-            <option key={days} value={days}>
-              {days === 7 ? "A week" : days === 14 ? "Two weeks" : days === 30 ? "A month" : "Three months"}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="field">
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={allowInquiries}
-            onChange={(e) => setAllowInquiries(e.target.checked)}
-          />
-          Let neighbors send me a private reply
-        </label>
-        <p className="field-hint">
-          Replies come to you alone and never appear on the board. Turn this off
-          for something nobody needs to answer.
-        </p>
-      </div>
-
-      <div className="row-actions">
-        <button className="btn btn-primary" disabled={saving || (pinned && !location)}>
-          {saving ? "Posting…" : "Post it"}
-        </button>
-        <button type="button" className="btn btn-secondary" onClick={onCancel}>
-          Cancel
-        </button>
-      </div>
-      {pinned && !location && (
-        <p className="field-hint">Tap the map to place your pin.</p>
-      )}
-    </form>
+    <NoticeForm
+      meta={meta}
+      submitLabel="Post it"
+      savingLabel="Posting…"
+      onCancel={onCancel}
+      onSubmit={async (payload) => {
+        await api.post("/api/notices", payload);
+        await onPosted();
+      }}
+    />
   );
 }
 
-// Shown when the account has no neighborhood yet: the board is scoped to one,
-// so there is genuinely nothing to render until they pick.
+
 function ChooseNeighborhood({ onDone }) {
   const [communityId, setCommunityId] = useState("");
   const [saving, setSaving] = useState(false);

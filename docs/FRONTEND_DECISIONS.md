@@ -199,6 +199,24 @@ expose something the UI ideally wants; I worked around them and noted each.
   run. My first attempt reported "no suggestions" purely because I didn't wait
   long enough — the component was fine.
 
+## Revisions — 2026-07-29, round four (editing)
+
+- **The compose form was extracted to `components/NoticeForm.jsx`** and is now
+  shared by writing and editing. Nine fields, a geocoder and a map picker copied
+  into a second component would have drifted within a week, and the edit form
+  would quietly miss whatever the create form gained next.
+- **`existing` is the only mode switch.** Passing a post fills the fields and
+  changes exactly two behaviours: the heading/button wording, and expiry
+  defaulting to "leave as it is" instead of the standard window.
+- **`clear_location` is sent only when a post that HAD a pin loses it.** A null
+  `location` in a PATCH is indistinguishable from "field not sent" after
+  serialisation, so removing a pin needs the explicit flag.
+- **Editing replaces the author's panel rather than opening a modal**, so the post
+  itself stays visible above the form while you change it.
+- Driving a React `<select>` from the harness needs the native setter on
+  `HTMLSelectElement.prototype` and a `change` event — same trap as the text
+  inputs, different prototype.
+
 ## Not done (deferred)
 
 - No automated frontend tests (the backend now has a 200-test pytest suite;

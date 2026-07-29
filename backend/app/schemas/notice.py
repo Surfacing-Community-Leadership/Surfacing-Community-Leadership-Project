@@ -41,6 +41,9 @@ class NoticeCreate(BaseModel):
 
 
 class NoticeUpdate(BaseModel):
+    # Editable, but re-validated against the account type in the router — a
+    # person must not be able to relabel their post as an official announcement.
+    category: NoticeCategory | None = None
     title: str | None = Field(None, min_length=1, max_length=140)
     body: str | None = Field(None, min_length=MIN_BODY_CHARS, max_length=MAX_BODY_CHARS)
     place_hint: str | None = Field(None, max_length=200)
@@ -52,6 +55,14 @@ class NoticeUpdate(BaseModel):
     expires_at: datetime | None = None
     # True marks it done ("the couch is gone"), False puts it back up.
     resolved: bool | None = None
+
+    # Without this, an unknown or retired type slips past validation and lands on
+    # the router's account-type check, which then reports "that post type is for
+    # organization accounts" — true of neither, and misleading.
+    @field_validator("category")
+    @classmethod
+    def _known_category(cls, value: str | None) -> str | None:
+        return None if value is None else _validate_category(value)
 
 
 class NoticeSummary(BaseModel):
