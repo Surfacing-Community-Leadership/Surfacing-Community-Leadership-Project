@@ -984,21 +984,9 @@
   font-size: 14px;
   margin-bottom: 22px;
 }
-/* Nine post types plus Everything / Official / Yours would stack three rows
-   deep on a phone, so the strip scrolls sideways instead of wrapping. */
-.org .board-filters {
+/* Three tabs, so they fit a phone without scrolling or wrapping. */
+.org .board-tabs {
   margin-bottom: 22px;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none;
-  padding-bottom: 4px;
-  -webkit-overflow-scrolling: touch;
-}
-.org .board-filters::-webkit-scrollbar {
-  display: none;
-}
-.org .board-filters .pill-tab {
-  flex: 0 0 auto;
 }
 
 /* ---- Post of the day ----------------------------------------------------
@@ -1042,7 +1030,9 @@
 .org .potd-foot {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px 14px;
+  /* Wraps rather than clipping the caption at a phone's right edge. */
+  flex-wrap: wrap;
   margin-top: 12px;
   font-size: 12px;
 }
@@ -1091,13 +1081,25 @@
   font-size: 13px;
 }
 
+/* One post per row. A post is something you read, so it gets the full column
+   width instead of being clipped into a tile — the same shape as the highlight
+   above it, minus the tint that marks that one out. */
+.org .board-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
 .org .notice-card {
+  display: flex;
+  flex-direction: column;
   gap: 10px;
-  padding: 22px 24px;
-  /* A hairline in the category's colour does the work a coloured background
-     would, without turning the grid into a set of traffic lights. */
-  border-left: 4px solid var(--nc-accent, var(--color-accent-200));
-  border-radius: 22px;
+  padding: 26px 28px;
+  background: var(--color-surface);
+  /* A rule in the type's colour does the work a coloured background would,
+     without turning the board into a set of traffic lights. */
+  border: 0;
+  border-left: 5px solid var(--nc-accent, var(--color-accent-200));
+  border-radius: 26px;
   text-decoration: none;
   color: inherit;
   transition: transform 0.16s ease;
@@ -1108,6 +1110,7 @@
 }
 .org .notice-card h3 {
   margin: 0;
+  font-size: clamp(20px, 2.1vw, 26px);
 }
 .org .notice-tags {
   display: flex;

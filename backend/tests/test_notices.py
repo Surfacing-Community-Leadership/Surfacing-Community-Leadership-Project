@@ -697,10 +697,12 @@ async def test_post_of_the_day_respects_blocks(board_user):
     assert (await reader.get("/api/notices/top")).json() is None
 
 
-# ---- the official section --------------------------------------------------
+# ---- the two reading tabs --------------------------------------------------
 
 
-async def test_official_narrows_to_verified_organizations(board_user, make_org, community_id):
+async def test_organizations_narrows_to_verified_organizations(
+    board_user, make_org, community_id
+):
     person = await board_user("person@example.com", "Ada")
     await person.post("/api/notices", json=notice_payload(title="A neighbour's post"))
 
@@ -714,9 +716,63 @@ async def test_official_narrows_to_verified_organizations(board_user, make_org, 
     everything = (await person.get("/api/notices")).json()
     assert len(everything) == 2
 
-    official = (await person.get("/api/notices?official=true")).json()
+    official = (await person.get("/api/notices?source=organizations")).json()
     assert [n["title"] for n in official] == ["An official notice"]
     assert official[0]["author_verified"] is True
+
+    # And the two tabs are complements, not overlapping filters.
+    posts = (await person.get("/api/notices?source=posts")).json()
+    assert [n["title"] for n in posts] == ["A neighbour's post"]
+
+
+async def test_the_two_tabs_partition_the_board(board_user, make_org, community_id):
+    """Every post must be reachable from exactly one tab. An unverified
+    organization is the case that would otherwise fall between them."""
+    person = await board_user("person@example.com", "Ada")
+    await person.post("/api/notices", json=notice_payload(title="From a neighbour"))
+
+    verified = await make_org("library@brooklyn.gov", "Sunset Park Library")
+    await verified.patch("/api/profiles/me", json={"community_id": community_id})
+    await verified.post(
+        "/api/notices", json=notice_payload(title="From a verified org")
+    )
+
+    # A .org signs up as an organization but earns no badge — see core/orgs.py.
+    unverified = await make_org("aid@sunsetparkmutualaid.org", "Mutual Aid")
+    await unverified.patch("/api/profiles/me", json={"community_id": community_id})
+    await unverified.post(
+        "/api/notices", json=notice_payload(title="From an unverified org")
+    )
+
+    posts = {n["title"] for n in (await person.get("/api/notices?source=posts")).json()}
+    orgs = {
+        n["title"]
+        for n in (await person.get("/api/notices?source=organizations")).json()
+    }
+    everything = {n["title"] for n in (await person.get("/api/notices")).json()}
+
+    assert orgs == {"From a verified org"}
+    # The unverified org lands with the neighbours rather than nowhere at all.
+    assert posts == {"From a neighbour", "From an unverified org"}
+    assert posts | orgs == everything
+    assert posts & orgs == set()
+
+
+async def test_your_own_posts_ignore_the_tab_split(make_org, community_id):
+    """"Yours" is your own posts wherever they sit, so a verified organization
+    still finds its own work under that tab."""
+    library = await make_org("library@brooklyn.gov", "Sunset Park Library")
+    await library.patch("/api/profiles/me", json={"community_id": community_id})
+    await library.post("/api/notices", json=notice_payload(title="Ours"))
+
+    mine = (await library.get("/api/notices?mine=true&source=posts")).json()
+    assert [n["title"] for n in mine] == ["Ours"]
+
+
+async def test_an_unknown_source_is_rejected(board_user):
+    author = await board_user("author@example.com")
+    r = await author.get("/api/notices?source=nonsense")
+    assert r.status_code == 422
 
 
 # ---- private inquiries toggle ----------------------------------------------

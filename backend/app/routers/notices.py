@@ -1,4 +1,9 @@
-"""The neighborhood notice board.
+"""The community board.
+
+Called the "community board" in the interface; the table, the routes and the
+model are still `notice`/`notices`. That's deliberate — renaming a shipped
+schema and its migration chain to match a label change buys nothing and risks
+a lot. Read "notice" as "board post" throughout this file.
 
 Reading the board is scoped by community, not by radius: everyone in a
 neighborhood reads the same board, which is what makes it a *place* rather than
@@ -9,7 +14,7 @@ crime-and-safety type.
 Two things here are deliberately narrow, and both matter:
 
   * **Stars are counted, never listed.** There is no endpoint that reveals who
-    starred a notice — not to the public and not to its author. A count says
+    starred a post — not to the public and not to its author. A count says
     "this was useful"; a list of names would make it a popularity contest.
   * **Replies are private and optional.** One line, to the author only, and only
     when they left `allow_direct_inquiries` on.
@@ -58,8 +63,8 @@ from app.schemas.notice import (
 router = APIRouter(prefix="/api/notices", tags=["notices"])
 
 NO_COMMUNITY = "Choose your neighborhood to use the board"
-UNCONFIRMED_EMAIL = "Confirm your email address to post a notice"
-INQUIRIES_CLOSED = "This notice isn't taking replies"
+UNCONFIRMED_EMAIL = "Confirm your email address to post on the board"
+INQUIRIES_CLOSED = "This post isn't taking replies"
 
 
 def _live_clause(now: datetime):
@@ -79,7 +84,7 @@ async def _live_count(db, author_id: uuid.UUID, now: datetime) -> int:
 
 
 def _allowance_message(limit: int) -> str:
-    return f"You already have {limit} notices up"
+    return f"You already have {limit} posts up"
 
 
 def _summary(
@@ -194,6 +199,31 @@ def _with_author(query):
     )
 
 
+# "Official" means a vetted institution: an organization account carrying the
+# badge. coalesce() rather than a bare comparison because the author joins are
+# outer — a NULL from a missing profile must read as "not official", not as NULL
+# (which would drop the row from BOTH sides of the split below).
+_IS_OFFICIAL = and_(
+    func.coalesce(User.org_verified, False).is_(True),
+    func.coalesce(Profile.account_type, "person") == "organization",
+)
+
+# The board's two reading tabs. Deliberately a complete partition of the board:
+# "organizations" is the official side, "posts" is *everything else* rather than
+# "people only". An unverified organization (a mutual-aid group on a .org, say)
+# therefore shows up under posts instead of falling between the two tabs and
+# becoming unreachable.
+SOURCES = ("all", "posts", "organizations")
+
+
+def _apply_source(query, source: str):
+    if source == "organizations":
+        return query.where(_IS_OFFICIAL)
+    if source == "posts":
+        return query.where(~_IS_OFFICIAL)
+    return query
+
+
 def _board_query(
     user: User, community_id: uuid.UUID, now: datetime, *, include_resolved: bool = False
 ):
@@ -218,13 +248,13 @@ async def _get_notice_for_viewer(db, notice_id: uuid.UUID, user: User) -> Notice
     ids never confirms one exists."""
     notice = await db.get(Notice, notice_id)
     if notice is None:
-        raise HTTPException(status_code=404, detail="Notice not found")
+        raise HTTPException(status_code=404, detail="Post not found")
     if notice.author_id == user.id:
         return notice
     if await get_my_community_id(db, user.id) != notice.community_id:
-        raise HTTPException(status_code=404, detail="Notice not found")
+        raise HTTPException(status_code=404, detail="Post not found")
     if await blocked_either_way(db, user.id, notice.author_id):
-        raise HTTPException(status_code=404, detail="Notice not found")
+        raise HTTPException(status_code=404, detail="Post not found")
     return notice
 
 
@@ -340,7 +370,7 @@ async def list_notices(
     db: DB,
     user: CurrentUser,
     category: Annotated[str | None, Query()] = None,
-    official: Annotated[bool, Query()] = False,
+    source: Annotated[str, Query()] = "all",
     mine: Annotated[bool, Query()] = False,
     include_resolved: Annotated[bool, Query()] = False,
     limit: Annotated[int, Query(gt=0, le=100)] = 50,
@@ -348,10 +378,15 @@ async def list_notices(
 ):
     """The board, newest first.
 
-    `mine=true` returns your own notices whatever their state, since you need to
-    see an expired one to manage it. `official=true` narrows to verified
-    organizations — the municipal/institutional section of the board.
+    `source` picks the reading tab: "posts" for the neighbourhood side,
+    "organizations" for posts from verified institutions, "all" for both.
+    `mine=true` returns your own posts whatever their state, since you need to
+    see an expired one to manage it.
     """
+    if source not in SOURCES:
+        raise HTTPException(
+            status_code=422, detail=f"source must be one of {', '.join(SOURCES)}"
+        )
     now = datetime.now(timezone.utc)
     community_id = await get_my_community_id(db, user.id)
     # No neighborhood means no board. Empty rather than an error: /meta already
@@ -368,11 +403,10 @@ async def list_notices(
             user, community_id, now, include_resolved=include_resolved
         )
 
-    if official:
-        # The board's official section: verified institutions only.
-        query = query.where(
-            User.org_verified.is_(True), Profile.account_type == "organization"
-        )
+    # "Yours" is your own posts regardless of which side of the board they sit
+    # on, so the source split doesn't apply to it.
+    if not mine:
+        query = _apply_source(query, source)
     if category is not None:
         query = query.where(Notice.category == category)
 
@@ -470,9 +504,9 @@ async def update_notice(
     now = datetime.now(timezone.utc)
     notice = await db.get(Notice, notice_id)
     if notice is None:
-        raise HTTPException(status_code=404, detail="Notice not found")
+        raise HTTPException(status_code=404, detail="Post not found")
     if notice.author_id != user.id:
-        raise HTTPException(status_code=403, detail="That isn't your notice")
+        raise HTTPException(status_code=403, detail="That isn't your post")
 
     updates = payload.model_dump(exclude_unset=True)
     resolved = updates.pop("resolved", None)
@@ -538,9 +572,9 @@ async def update_notice(
 async def delete_notice(notice_id: uuid.UUID, db: DB, user: CurrentUser) -> None:
     notice = await db.get(Notice, notice_id)
     if notice is None:
-        raise HTTPException(status_code=404, detail="Notice not found")
+        raise HTTPException(status_code=404, detail="Post not found")
     if notice.author_id != user.id:
-        raise HTTPException(status_code=403, detail="That isn't your notice")
+        raise HTTPException(status_code=403, detail="That isn't your post")
     await db.delete(notice)
     await db.commit()
 
@@ -609,7 +643,7 @@ async def list_replies(notice_id: uuid.UUID, db: DB, user: CurrentUser):
     the board has no comment threads: an answer goes to one person."""
     notice = await db.get(Notice, notice_id)
     if notice is None:
-        raise HTTPException(status_code=404, detail="Notice not found")
+        raise HTTPException(status_code=404, detail="Post not found")
     if notice.author_id != user.id:
         raise HTTPException(status_code=403, detail="Only the author sees replies")
 
@@ -644,11 +678,11 @@ async def reply_to_notice(
     now = datetime.now(timezone.utc)
     notice = await _get_notice_for_viewer(db, notice_id, user)
     if notice.author_id == user.id:
-        raise HTTPException(status_code=409, detail="That's your own notice")
+        raise HTTPException(status_code=409, detail="That's your own post")
     if not notice.allow_direct_inquiries:
         raise HTTPException(status_code=403, detail=INQUIRIES_CLOSED)
     if notice.resolved_at is not None or notice.expires_at <= now:
-        raise HTTPException(status_code=409, detail="That notice is closed")
+        raise HTTPException(status_code=409, detail="That post is closed")
 
     reply = await db.scalar(
         select(NoticeReply).where(

@@ -269,6 +269,38 @@ superseded.
 - **Deliberately NOT built:** the Knowledge & Skills Resource Pool. Its spec
   listed "3 Pillar Categories" and named only one, and the user chose to defer it.
 
+## Revisions — 2026-07-29, round two (Community board)
+
+- **Renamed "Notice board" → "Community board"** in the interface, and each entry
+  is a "post" rather than a "notice" in all visible copy. **The schema, routes and
+  models were deliberately NOT renamed** — the table is still `notices`, the API
+  is still `/api/notices`, the model is still `Notice`. Renaming a shipped schema
+  and its migration chain to chase a label buys nothing and risks a lot; the
+  router docstring says so explicitly so the mismatch reads as a decision rather
+  than an oversight.
+- **Nine per-type filter tabs collapsed to three reading tabs**: Posts,
+  Organizations, My posts. Post *types* still exist and still show as a tag on
+  every card — they just aren't a navigation axis any more. The board is
+  something you read down, not something you query.
+- **`official=true` became `source=all|posts|organizations`**, and the two tabs
+  are a **complete partition** of the board rather than two independent filters.
+  `posts` is "everything not official", *not* "people only": an unverified
+  organization (a mutual-aid group on a `.org`) would otherwise appear under
+  neither tab and become unreachable. `test_the_two_tabs_partition_the_board`
+  asserts `posts | orgs == everything` and `posts & orgs == set()`.
+  `_IS_OFFICIAL` uses `coalesce()` because the author joins are outer — a NULL
+  would otherwise drop a row from *both* sides of the split.
+- **"Yours" ignores the split**, so a verified organization still finds its own
+  work under My posts.
+- **Post of the day appears above the Posts tab only**, but still ranks across
+  the whole board — so an organization's post can win it. It's labelled "post of
+  the day", not "a neighbour's post", so nothing misrepresents itself; scoping the
+  ranking per-tab would have meant a great official post could never be
+  highlighted anywhere.
+- **The grid became a single-column list.** Each card is now full-width with the
+  same shape as the highlight above it, minus that one's tint — a post is
+  something you read, and a tile clips the words.
+
 ## Deferred (known gaps to discuss)
 
 - Rate limiting is in the stack but still not wired.

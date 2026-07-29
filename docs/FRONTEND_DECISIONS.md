@@ -169,6 +169,19 @@ expose something the UI ideally wants; I worked around them and noted each.
 - **Long-form types get `rows={10}` and a live character counter** in the compose
   form, and `clamp-2` on the board card.
 
+## Revisions — 2026-07-29, round two (Community board)
+
+- **`.notice-card` no longer composes with `.card`.** Dropping the grid meant the
+  card had to stand on its own — it now sets its own surface, padding and radius
+  rather than inheriting a tile's.
+- **`.board-list` is a flex column**, and the heading scales with `clamp()` now
+  that a card has the full column width to play with.
+- **The nav label stays "Board"** even though the page is "Community board" —
+  five characters is what fits a phone tab bar, and the icon carries the rest.
+- **`.potd-foot` wraps.** Its caption ran to the right edge at 390px; caught in a
+  screenshot, not by the overflow measurement, which stayed at 0 because the text
+  was clipping inside its container rather than widening the document.
+
 ## Not done (deferred)
 
 - No automated frontend tests (the backend now has a 200-test pytest suite;

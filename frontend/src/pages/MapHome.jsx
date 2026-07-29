@@ -126,7 +126,7 @@ export default function MapHome() {
               checked={showNotices}
               onChange={(e) => setShowNotices(e.target.checked)}
             />
-            Show {notices.length} board {notices.length === 1 ? "notice" : "notices"}
+            Show {notices.length} board {notices.length === 1 ? "post" : "posts"}
             <Link to="/board" className="link-button">
               Board
             </Link>

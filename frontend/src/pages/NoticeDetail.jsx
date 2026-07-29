@@ -17,10 +17,10 @@ function formatWhen(iso) {
   });
 }
 
-// One notice, and the only place a reply can be written or read.
+// One board post, and the only place a reply can be written or read.
 //
 // Two quite different screens share this route. The author sees their replies
-// and the controls to take the notice down; everyone else sees a single reply
+// and the controls to take the post down; everyone else sees a single reply
 // box and no hint of who else has answered.
 export default function NoticeDetail() {
   const { noticeId } = useParams();
@@ -270,7 +270,7 @@ function ReplyBox({ notice, closed, onSent }) {
             <ReportNotice notice={notice} onDone={() => setReporting(false)} />
           ) : (
             <button className="link-button" onClick={() => setReporting(true)}>
-              Report this notice
+              Report this post
             </button>
           )}
         </div>
@@ -326,7 +326,7 @@ function ReplyBox({ notice, closed, onSent }) {
           <ReportNotice notice={notice} onDone={() => setReporting(false)} />
         ) : (
           <button className="link-button" onClick={() => setReporting(true)}>
-            Report this notice
+            Report this post
           </button>
         )}
       </div>
@@ -380,7 +380,7 @@ function ReportNotice({ notice, onDone }) {
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           maxLength={200}
-          placeholder="Spam, abusive, not a real notice…"
+          placeholder="Spam, abusive, not a real post…"
         />
       </div>
       <div className="row-actions">

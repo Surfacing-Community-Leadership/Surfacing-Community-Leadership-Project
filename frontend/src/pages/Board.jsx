@@ -7,8 +7,6 @@ import LocationPicker from "../components/LocationPicker.jsx";
 import StarButton from "../components/StarButton.jsx";
 import { useGeolocation } from "../hooks/useGeolocation.js";
 import {
-  CATEGORY_ORDER,
-  NOTICE_CATEGORIES,
   categoryHint,
   categoryLabel,
   categoryShort,
@@ -17,27 +15,36 @@ import {
   timeLeft,
 } from "../lib/noticeCategories.js";
 
-// The neighborhood notice board: things worth knowing that aren't invitations.
-// Anything you can show up to is an event and lives on the map instead.
+// The community board: things worth knowing that aren't invitations. Anything
+// you can show up to is an event and lives on the map instead.
 //
 // No endless feed, no ranking by engagement, no comment threads — every one of
 // those is how a neighborhood board turns into an argument. What keeps it
 // readable: everything expires, everyone gets a small allowance, replies go
 // privately to whoever posted, and the one piece of prominence on the page
-// (Post of the Day) rotates on a 24-hour window rather than accumulating.
+// (Post of the day) rotates on a 24-hour window rather than accumulating.
+//
+// Three tabs, not a filter per post type. Posts and Organizations partition the
+// board between them — see SOURCES in the router for why "Posts" is
+// "everything not official" rather than "people only".
+const TABS = [
+  { key: "posts", label: "Posts" },
+  { key: "organizations", label: "Organizations" },
+  { key: "mine", label: "My posts" },
+];
+
 export default function Board() {
-  const [filter, setFilter] = useState("all");
+  const [tab, setTab] = useState("posts");
   const [composing, setComposing] = useState(false);
 
   const meta = useApi(() => api.get("/api/notices/meta"));
   const top = useApi(() => api.get("/api/notices/top"));
   const board = useApi(() => {
     const params = new URLSearchParams();
-    if (filter === "mine") params.set("mine", "true");
-    else if (filter === "official") params.set("official", "true");
-    else if (filter !== "all") params.set("category", filter);
+    if (tab === "mine") params.set("mine", "true");
+    else params.set("source", tab);
     return api.get(`/api/notices?${params}`);
-  }, [filter]);
+  }, [tab]);
 
   async function refresh() {
     await Promise.all([meta.reload(), board.reload(), top.reload()]);
@@ -55,9 +62,12 @@ export default function Board() {
   // not a radius. Offer the same picker onboarding uses rather than an error.
   if (!meta.data.community_id) return <ChooseNeighborhood onDone={refresh} />;
 
-  const showTop = filter === "all" && top.data;
-  // Don't print the same notice twice: when it's highlighted above, it comes out
-  // of the grid rather than appearing in both places.
+  // The highlight lives above the Posts tab — the board's front page. It ranks
+  // across the whole board, so the winner can be an organization's post; it's
+  // labelled "post of the day", not "a neighbour's post", so that's honest.
+  const showTop = tab === "posts" && top.data;
+  // Don't print the same post twice: when it's highlighted above, it comes out
+  // of the list rather than appearing in both places.
   const listed = showTop
     ? (board.data || []).filter((n) => n.id !== top.data.id)
     : board.data || [];
@@ -67,11 +77,11 @@ export default function Board() {
       <div className="page-head">
         <div>
           <span className="kicker">{meta.data.community_name}</span>
-          <h1>Notice board</h1>
+          <h1>Community board</h1>
         </div>
         {meta.data.can_post ? (
           <button className="btn" onClick={() => setComposing((v) => !v)}>
-            {composing ? "Never mind" : "Put up a notice"}
+            {composing ? "Never mind" : "Write a post"}
           </button>
         ) : null}
       </div>
@@ -88,7 +98,7 @@ export default function Board() {
           {meta.data.live_count >= meta.data.max_live && (
             <>
               {" "}
-              <button className="link-button" onClick={() => setFilter("mine")}>
+              <button className="link-button" onClick={() => setTab("mine")}>
                 Manage yours
               </button>
             </>
@@ -109,7 +119,7 @@ export default function Board() {
 
       {showTop && <PostOfTheDay notice={top.data} onStar={() => top.reload()} />}
 
-      <Filters value={filter} onChange={setFilter} categories={meta.data.categories} />
+      <Tabs value={tab} onChange={setTab} />
 
       {board.loading ? (
         <p className="muted">Loading…</p>
@@ -117,32 +127,33 @@ export default function Board() {
         <div className="alert">{board.error}</div>
       ) : listed.length === 0 ? (
         <p className="muted board-empty">
-          {showTop ? "Nothing else on the board right now." : emptyMessage(filter)}
+          {showTop ? "Nothing else on the board right now." : emptyMessage(tab)}
         </p>
       ) : (
-        <div className="card-grid">
+        // One per row rather than a grid: a post is something you read, and a
+        // full-width card gives the words room instead of clipping them into a
+        // tile. Same shape as the highlight above, minus its tint.
+        <div className="board-list">
           {listed.map((notice) => (
             <NoticeCard key={notice.id} notice={notice} />
           ))}
         </div>
       )}
 
-      {filter !== "mine" && (
+      {tab !== "mine" && (
         <p className="muted allowance">
-          You have {meta.data.live_count} of {meta.data.max_live} notices up.
+          You have {meta.data.live_count} of {meta.data.max_live} posts up.
         </p>
       )}
     </div>
   );
 }
 
-function emptyMessage(filter) {
-  if (filter === "mine") return "You haven't put anything up yet.";
-  if (filter === "official")
-    return "No official notices right now. Verified organizations post here.";
-  if (filter === "all")
-    return "Nothing on the board right now. A quiet board is a fine thing.";
-  return "Nothing of this kind right now.";
+function emptyMessage(tab) {
+  if (tab === "mine") return "You haven't written anything yet.";
+  if (tab === "organizations")
+    return "Nothing from local organizations right now. Verified libraries, schools and parks post here.";
+  return "Nothing on the board right now. A quiet board is a fine thing.";
 }
 
 // One highlighted notice, chosen by stars earned in the last 24 hours. One post,
@@ -175,49 +186,30 @@ function PostOfTheDay({ notice, onStar }) {
   );
 }
 
-function Filters({ value, onChange, categories }) {
+// Three tabs, and no per-type filter. Each post still wears its type as a tag,
+// so you can tell a giveaway from a closure while scrolling — the board is
+// something you read down, not something you query.
+function Tabs({ value, onChange }) {
   return (
-    // Horizontally scrollable rather than wrapping: nine types plus three
-    // pseudo-filters would otherwise stack three rows deep on a phone.
-    <div className="pill-tabs board-filters">
-      <button
-        className={value === "all" ? "pill-tab on" : "pill-tab"}
-        onClick={() => onChange("all")}
-      >
-        Everything
-      </button>
-      <button
-        className={value === "official" ? "pill-tab on" : "pill-tab"}
-        onClick={() => onChange("official")}
-      >
-        Official
-      </button>
-      {CATEGORY_ORDER
-        // Only offer filters for types this account could encounter: the
-        // org-only ones stay off a personal account's strip.
-        .filter((key) => categories.includes(key) || !NOTICE_CATEGORIES[key].orgOnly)
-        .map((key) => (
-          <button
-            key={key}
-            className={value === key ? "pill-tab on" : "pill-tab"}
-            onClick={() => onChange(key)}
-          >
-            {categoryShort(key)}
-          </button>
-        ))}
-      <button
-        className={value === "mine" ? "pill-tab on" : "pill-tab"}
-        onClick={() => onChange("mine")}
-      >
-        Yours
-      </button>
+    <div className="pill-tabs board-tabs" role="tablist">
+      {TABS.map(({ key, label }) => (
+        <button
+          key={key}
+          role="tab"
+          aria-selected={value === key}
+          className={value === key ? "pill-tab on" : "pill-tab"}
+          onClick={() => onChange(key)}
+        >
+          {label}
+        </button>
+      ))}
     </div>
   );
 }
 
 function NoticeCard({ notice }) {
   return (
-    <Link to={`/board/${notice.id}`} className={`card notice-card nc-${notice.category}`}>
+    <Link to={`/board/${notice.id}`} className={`notice-card nc-${notice.category}`}>
       <div className="notice-tags">
         <span className={`tag tag-${notice.category}`}>
           {categoryShort(notice.category)}
@@ -301,7 +293,7 @@ function ComposeNotice({ meta, onPosted, onCancel }) {
 
   return (
     <form className={`notice-form form-${category}`} onSubmit={submit}>
-      <h2>Put up a notice</h2>
+      <h2>Write a post</h2>
       {error && <div className="alert">{error}</div>}
 
       <div className="field">
@@ -446,7 +438,7 @@ function ComposeNotice({ meta, onPosted, onCancel }) {
 
       <div className="row-actions">
         <button className="btn btn-primary" disabled={saving || (pinned && !location)}>
-          {saving ? "Putting it up…" : "Put it up"}
+          {saving ? "Posting…" : "Post it"}
         </button>
         <button type="button" className="btn btn-secondary" onClick={onCancel}>
           Cancel
@@ -480,7 +472,7 @@ function ChooseNeighborhood({ onDone }) {
 
   return (
     <div className="org narrow">
-      <span className="kicker">Notice board</span>
+      <span className="kicker">Community board</span>
       <h1>Which neighborhood is yours?</h1>
       <p className="muted">
         The board belongs to a neighborhood rather than a radius, so everyone

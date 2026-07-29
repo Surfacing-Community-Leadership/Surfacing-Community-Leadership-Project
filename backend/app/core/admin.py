@@ -96,7 +96,7 @@ class EventAdmin(ModelView, model=Event):
 
 
 class NoticeAdmin(ModelView, model=Notice):
-    name_plural = "Notices (board)"
+    name_plural = "Posts (community board)"
     icon = "fa-solid fa-thumbtack"
     column_list = [
         Notice.title,
