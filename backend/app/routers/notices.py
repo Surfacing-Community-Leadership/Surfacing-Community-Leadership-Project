@@ -1,12 +1,21 @@
 """The neighborhood notice board.
 
-Scoped by community, not by radius: everyone in a neighborhood reads the same
-board, which is what makes it a *place* rather than a personalized feed. See
-app.core.notices for the three rules that keep it quiet (expiry, an allowance,
-a closed category list) and for why there is no crime-and-safety category.
+Reading the board is scoped by community, not by radius: everyone in a
+neighborhood reads the same board, which is what makes it a *place* rather than
+a personalized feed. See app.core.notices for the rules that keep it quiet
+(expiry, an allowance, a closed list of post types) and for why there is no
+crime-and-safety type.
 
-Posting requires a confirmed email address. That is the only spam gate the board
-has, and it costs an attacker a working inbox per throwaway account.
+Two things here are deliberately narrow, and both matter:
+
+  * **Stars are counted, never listed.** There is no endpoint that reveals who
+    starred a notice — not to the public and not to its author. A count says
+    "this was useful"; a list of names would make it a popularity contest.
+  * **Replies are private and optional.** One line, to the author only, and only
+    when they left `allow_direct_inquiries` on.
+
+Posting requires a confirmed email. That is the only spam gate the board has,
+and it costs an attacker a working inbox per throwaway account.
 """
 
 import uuid
@@ -16,15 +25,18 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import and_, func, select
 
+from app.core.geo import to_latlng, wkt_point
 from app.core.notices import (
-    MAX_LIVE_NOTICES,
+    DEFAULT_EXPIRY_DAYS,
     categories_for,
     default_expires_at,
     is_category_allowed,
     latest_expires_at,
+    max_live_for,
+    star_window_start,
 )
 from app.core.notifications import notify
-from app.models import Community, Notice, NoticeReply, Profile, User
+from app.models import Community, Notice, NoticeReply, NoticeStar, Profile, User
 from app.routers.deps import (
     DB,
     CurrentUser,
@@ -40,13 +52,14 @@ from app.schemas.notice import (
     NoticeReplyRead,
     NoticeSummary,
     NoticeUpdate,
+    StarState,
 )
 
 router = APIRouter(prefix="/api/notices", tags=["notices"])
 
 NO_COMMUNITY = "Choose your neighborhood to use the board"
 UNCONFIRMED_EMAIL = "Confirm your email address to post a notice"
-ALLOWANCE_FULL = f"You already have {MAX_LIVE_NOTICES} notices up"
+INQUIRIES_CLOSED = "This notice isn't taking replies"
 
 
 def _live_clause(now: datetime):
@@ -65,6 +78,10 @@ async def _live_count(db, author_id: uuid.UUID, now: datetime) -> int:
     ) or 0
 
 
+def _allowance_message(limit: int) -> str:
+    return f"You already have {limit} notices up"
+
+
 def _summary(
     notice: Notice,
     author_name: str | None,
@@ -72,6 +89,8 @@ def _summary(
     org_verified: bool | None,
     *,
     is_mine: bool,
+    stars: int = 0,
+    i_starred: bool = False,
     reply_count: int | None = None,
     i_replied: bool = False,
 ) -> NoticeSummary:
@@ -81,14 +100,18 @@ def _summary(
         title=notice.title,
         body=notice.body,
         place_hint=notice.place_hint,
+        location=to_latlng(notice.location),
         author_id=notice.author_id,
         author_name=author_name,
         author_is_org=account_type == "organization",
         # The badge only means something on an organization account.
         author_verified=bool(org_verified) and account_type == "organization",
+        allow_direct_inquiries=notice.allow_direct_inquiries,
         expires_at=notice.expires_at,
         resolved=notice.resolved_at is not None,
         created_at=notice.created_at,
+        stars=stars,
+        i_starred=i_starred,
         # Reply counts are the author's business alone: showing "4 replies" to
         # everyone would leak who is interested in what.
         reply_count=reply_count if is_mine else None,
@@ -96,116 +119,38 @@ def _summary(
     )
 
 
-async def _get_notice_for_viewer(db, notice_id: uuid.UUID, user: User) -> Notice:
-    """A notice the viewer is allowed to see: on their own board, and not from
-    someone they have a block with. 404 rather than 403 throughout, so probing
-    ids never confirms one exists."""
-    notice = await db.get(Notice, notice_id)
-    if notice is None:
-        raise HTTPException(status_code=404, detail="Notice not found")
-    if notice.author_id == user.id:
-        return notice
-    if await get_my_community_id(db, user.id) != notice.community_id:
-        raise HTTPException(status_code=404, detail="Notice not found")
-    if await blocked_either_way(db, user.id, notice.author_id):
-        raise HTTPException(status_code=404, detail="Notice not found")
-    return notice
-
-
-# Declared before /{notice_id} so "meta" isn't parsed as a UUID path param.
-@router.get("/meta", response_model=BoardMeta)
-async def read_board_meta(db: DB, user: CurrentUser):
-    """Everything the board screen needs before it can render: which
-    neighborhood it is, what this account may post, and what's left of the
-    allowance. Never errors on a missing neighborhood — it reports the reason so
-    the UI can show the picker instead of an error."""
-    now = datetime.now(timezone.utc)
-    community_id = await get_my_community_id(db, user.id)
-    account_type = await get_account_type(db, user.id)
-    community_name = (
-        await db.scalar(select(Community.name).where(Community.id == community_id))
-        if community_id
-        else None
-    )
-    live = await _live_count(db, user.id, now) if community_id else 0
-
-    if community_id is None:
-        reason = NO_COMMUNITY
-    elif user.email_confirmed_at is None:
-        reason = UNCONFIRMED_EMAIL
-    elif live >= MAX_LIVE_NOTICES:
-        reason = ALLOWANCE_FULL
-    else:
-        reason = None
-
-    return BoardMeta(
-        community_id=community_id,
-        community_name=community_name,
-        categories=list(categories_for(account_type)),
-        live_count=live,
-        max_live=MAX_LIVE_NOTICES,
-        can_post=reason is None,
-        blocked_reason=reason,
-    )
-
-
-@router.get("", response_model=list[NoticeSummary])
-async def list_notices(
-    db: DB,
-    user: CurrentUser,
-    category: Annotated[str | None, Query()] = None,
-    mine: Annotated[bool, Query()] = False,
-    include_resolved: Annotated[bool, Query()] = False,
-    limit: Annotated[int, Query(gt=0, le=100)] = 50,
-    offset: Annotated[int, Query(ge=0)] = 0,
-):
-    """The board, newest first.
-
-    `mine=true` returns your own notices whatever their state, since you need to
-    see an expired one to manage it. Otherwise: your neighborhood's live
-    notices, minus anyone you have a block with.
-    """
-    now = datetime.now(timezone.utc)
-    community_id = await get_my_community_id(db, user.id)
-    # No neighborhood means no board. Empty rather than an error: /meta already
-    # told the client why, and it renders the picker.
-    if community_id is None and not mine:
-        return []
-
-    query = (
-        select(Notice, Profile.display_name, Profile.account_type, User.org_verified)
-        .outerjoin(Profile, Profile.user_id == Notice.author_id)
-        .outerjoin(User, User.id == Notice.author_id)
-        .order_by(Notice.created_at.desc())
-        .limit(limit)
-        .offset(offset)
-    )
-
-    if mine:
-        query = query.where(Notice.author_id == user.id)
-    else:
-        query = (
-            query.where(Notice.community_id == community_id)
-            .where(Notice.author_id.not_in(blocked_counterparts(user.id)))
-            .where(Notice.expires_at > now)
-        )
-        if not include_resolved:
-            query = query.where(Notice.resolved_at.is_(None))
-
-    if category is not None:
-        query = query.where(Notice.category == category)
-
-    rows = (await db.execute(query)).all()
+async def _decorate(db, rows, user: User) -> list[NoticeSummary]:
+    """Turn (notice, author_name, account_type, org_verified) rows into
+    summaries, attaching star counts and the viewer's own star/reply state in a
+    fixed number of queries rather than one per row."""
     if not rows:
         return []
 
     notice_ids = [notice.id for notice, *_ in rows]
-    # One round trip for the author's own reply counts, and one for "have I
-    # already replied to this" — rather than a query per row.
     my_notice_ids = [n.id for n, *_ in rows if n.author_id == user.id]
-    counts: dict[uuid.UUID, int] = {}
+
+    star_counts = dict(
+        (
+            await db.execute(
+                select(NoticeStar.notice_id, func.count())
+                .where(NoticeStar.notice_id.in_(notice_ids))
+                .group_by(NoticeStar.notice_id)
+            )
+        ).all()
+    )
+    starred = set(
+        (
+            await db.scalars(
+                select(NoticeStar.notice_id).where(
+                    NoticeStar.notice_id.in_(notice_ids),
+                    NoticeStar.user_id == user.id,
+                )
+            )
+        ).all()
+    )
+    reply_counts: dict[uuid.UUID, int] = {}
     if my_notice_ids:
-        counts = dict(
+        reply_counts = dict(
             (
                 await db.execute(
                     select(NoticeReply.notice_id, func.count())
@@ -232,11 +177,211 @@ async def list_notices(
             account_type,
             verified,
             is_mine=notice.author_id == user.id,
-            reply_count=counts.get(notice.id, 0),
+            stars=star_counts.get(notice.id, 0),
+            i_starred=notice.id in starred,
+            reply_count=reply_counts.get(notice.id, 0),
             i_replied=notice.id in replied,
         )
         for notice, name, account_type, verified in rows
     ]
+
+
+def _with_author(query):
+    """Attach the author's display name, account type and badge to a notice
+    query. Every read path needs all three."""
+    return query.outerjoin(Profile, Profile.user_id == Notice.author_id).outerjoin(
+        User, User.id == Notice.author_id
+    )
+
+
+def _board_query(
+    user: User, community_id: uuid.UUID, now: datetime, *, include_resolved: bool = False
+):
+    """Notices on one neighborhood's board, minus anyone the viewer has a block
+    with. The shared spine of the list, the map and post-of-the-day, so those
+    three can never disagree about what is visible to whom."""
+    query = _with_author(
+        select(Notice, Profile.display_name, Profile.account_type, User.org_verified)
+    ).where(
+        Notice.community_id == community_id,
+        Notice.author_id.not_in(blocked_counterparts(user.id)),
+        Notice.expires_at > now,
+    )
+    if not include_resolved:
+        query = query.where(Notice.resolved_at.is_(None))
+    return query
+
+
+async def _get_notice_for_viewer(db, notice_id: uuid.UUID, user: User) -> Notice:
+    """A notice the viewer is allowed to see: on their own board, and not from
+    someone they have a block with. 404 rather than 403 throughout, so probing
+    ids never confirms one exists."""
+    notice = await db.get(Notice, notice_id)
+    if notice is None:
+        raise HTTPException(status_code=404, detail="Notice not found")
+    if notice.author_id == user.id:
+        return notice
+    if await get_my_community_id(db, user.id) != notice.community_id:
+        raise HTTPException(status_code=404, detail="Notice not found")
+    if await blocked_either_way(db, user.id, notice.author_id):
+        raise HTTPException(status_code=404, detail="Notice not found")
+    return notice
+
+
+# Declared before /{notice_id} so these aren't parsed as UUID path params.
+@router.get("/meta", response_model=BoardMeta)
+async def read_board_meta(db: DB, user: CurrentUser):
+    """Everything the board screen needs before it can render: which
+    neighborhood it is, what this account may post, and what's left of the
+    allowance. Never errors on a missing neighborhood — it reports the reason so
+    the UI can show the picker instead of an error."""
+    now = datetime.now(timezone.utc)
+    community_id = await get_my_community_id(db, user.id)
+    account_type = await get_account_type(db, user.id)
+    limit = max_live_for(account_type)
+    community_name = (
+        await db.scalar(select(Community.name).where(Community.id == community_id))
+        if community_id
+        else None
+    )
+    live = await _live_count(db, user.id, now) if community_id else 0
+
+    if community_id is None:
+        reason = NO_COMMUNITY
+    elif user.email_confirmed_at is None:
+        reason = UNCONFIRMED_EMAIL
+    elif live >= limit:
+        reason = _allowance_message(limit)
+    else:
+        reason = None
+
+    return BoardMeta(
+        community_id=community_id,
+        community_name=community_name,
+        categories=list(categories_for(account_type)),
+        live_count=live,
+        max_live=limit,
+        can_post=reason is None,
+        blocked_reason=reason,
+        default_expiry_days=DEFAULT_EXPIRY_DAYS,
+    )
+
+
+@router.get("/top", response_model=NoticeSummary | None)
+async def read_post_of_the_day(db: DB, user: CurrentUser):
+    """The notice that earned the most stars in the trailing window.
+
+    Ranked on *recent* stars rather than the all-time count, so this is a
+    rotating spotlight and not a hall of fame — a good post from this morning can
+    beat last month's most-starred one. Returns null when nothing has been
+    starred lately, and the board simply shows no highlight.
+    """
+    now = datetime.now(timezone.utc)
+    community_id = await get_my_community_id(db, user.id)
+    if community_id is None:
+        return None
+
+    recent = (
+        select(NoticeStar.notice_id, func.count().label("recent_stars"))
+        .where(NoticeStar.created_at >= star_window_start(now))
+        .group_by(NoticeStar.notice_id)
+        .subquery()
+    )
+    row = (
+        await db.execute(
+            _board_query(user, community_id, now)
+            .join(recent, recent.c.notice_id == Notice.id)
+            # Ties break toward the newer post, for the same rotating reason.
+            .order_by(recent.c.recent_stars.desc(), Notice.created_at.desc())
+            .limit(1)
+        )
+    ).first()
+    if row is None:
+        return None
+    return (await _decorate(db, [row], user))[0]
+
+
+@router.get("/map", response_model=list[NoticeSummary])
+async def list_pinned_notices(
+    db: DB,
+    user: CurrentUser,
+    lat: Annotated[float, Query(ge=-90, le=90)],
+    lng: Annotated[float, Query(ge=-180, le=180)],
+    radius_m: Annotated[int, Query(gt=0, le=100_000)] = 5000,
+    limit: Annotated[int, Query(gt=0, le=200)] = 100,
+):
+    """Notices that carry a location, for the informational pins on the map.
+
+    Separate from the events map query rather than folded into it: a notice is
+    not an event, the two have no common ordering (notices have no start time),
+    and keeping them apart means the map's event list can't accidentally fill
+    with things nobody can attend.
+    """
+    now = datetime.now(timezone.utc)
+    community_id = await get_my_community_id(db, user.id)
+    if community_id is None:
+        return []
+
+    point = func.ST_GeogFromText(wkt_point(lat, lng))
+    rows = (
+        await db.execute(
+            _board_query(user, community_id, now)
+            .where(Notice.location.isnot(None))
+            .where(func.ST_DWithin(Notice.location, point, radius_m))
+            .order_by(func.ST_Distance(Notice.location, point))
+            .limit(limit)
+        )
+    ).all()
+    return await _decorate(db, rows, user)
+
+
+@router.get("", response_model=list[NoticeSummary])
+async def list_notices(
+    db: DB,
+    user: CurrentUser,
+    category: Annotated[str | None, Query()] = None,
+    official: Annotated[bool, Query()] = False,
+    mine: Annotated[bool, Query()] = False,
+    include_resolved: Annotated[bool, Query()] = False,
+    limit: Annotated[int, Query(gt=0, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+):
+    """The board, newest first.
+
+    `mine=true` returns your own notices whatever their state, since you need to
+    see an expired one to manage it. `official=true` narrows to verified
+    organizations — the municipal/institutional section of the board.
+    """
+    now = datetime.now(timezone.utc)
+    community_id = await get_my_community_id(db, user.id)
+    # No neighborhood means no board. Empty rather than an error: /meta already
+    # told the client why, and it renders the picker.
+    if community_id is None and not mine:
+        return []
+
+    if mine:
+        query = _with_author(
+            select(Notice, Profile.display_name, Profile.account_type, User.org_verified)
+        ).where(Notice.author_id == user.id)
+    else:
+        query = _board_query(
+            user, community_id, now, include_resolved=include_resolved
+        )
+
+    if official:
+        # The board's official section: verified institutions only.
+        query = query.where(
+            User.org_verified.is_(True), Profile.account_type == "organization"
+        )
+    if category is not None:
+        query = query.where(Notice.category == category)
+
+    rows = (
+        await db.execute(
+            query.order_by(Notice.created_at.desc()).limit(limit).offset(offset)
+        )
+    ).all()
+    return await _decorate(db, rows, user)
 
 
 @router.post("", response_model=NoticeSummary, status_code=201)
@@ -254,11 +399,12 @@ async def create_notice(payload: NoticeCreate, db: DB, user: CurrentUser):
         # institution's authority, so they need an organization behind them.
         raise HTTPException(
             status_code=403,
-            detail="That category is for verified organization accounts",
+            detail="That post type is for verified organization accounts",
         )
 
-    if await _live_count(db, user.id, now) >= MAX_LIVE_NOTICES:
-        raise HTTPException(status_code=409, detail=ALLOWANCE_FULL)
+    limit = max_live_for(account_type)
+    if await _live_count(db, user.id, now) >= limit:
+        raise HTTPException(status_code=409, detail=_allowance_message(limit))
 
     expires_at = payload.expires_at or default_expires_at(now)
     if expires_at <= now:
@@ -274,6 +420,12 @@ async def create_notice(payload: NoticeCreate, db: DB, user: CurrentUser):
         title=payload.title,
         body=payload.body,
         place_hint=payload.place_hint,
+        location=(
+            wkt_point(payload.location.lat, payload.location.lng)
+            if payload.location
+            else None
+        ),
+        allow_direct_inquiries=payload.allow_direct_inquiries,
         expires_at=expires_at,
     )
     db.add(notice)
@@ -303,39 +455,18 @@ async def read_notice(notice_id: uuid.UUID, db: DB, user: CurrentUser):
         )
     ).first()
     name, account_type, verified = row if row else (None, None, None)
-    is_mine = notice.author_id == user.id
-    reply_count = (
-        await db.scalar(
-            select(func.count())
-            .select_from(NoticeReply)
-            .where(NoticeReply.notice_id == notice.id)
-        )
-        or 0
-    )
-    i_replied = (
-        await db.scalar(
-            select(NoticeReply.id).where(
-                NoticeReply.notice_id == notice.id, NoticeReply.author_id == user.id
-            )
-        )
-    ) is not None
-    return _summary(
-        notice,
-        name,
-        account_type,
-        verified,
-        is_mine=is_mine,
-        reply_count=reply_count,
-        i_replied=i_replied,
-    )
+    return (
+        await _decorate(db, [(notice, name, account_type, verified)], user)
+    )[0]
 
 
 @router.patch("/{notice_id}", response_model=NoticeSummary)
 async def update_notice(
     notice_id: uuid.UUID, payload: NoticeUpdate, db: DB, user: CurrentUser
 ):
-    """Edit your own notice, extend it, or mark it done. The category is fixed
-    after posting — changing it would rewrite what neighbors already replied to."""
+    """Edit your own notice, extend it, move its pin, or mark it done. The post
+    type is fixed after posting — changing it would rewrite what neighbors
+    already read and replied to."""
     now = datetime.now(timezone.utc)
     notice = await db.get(Notice, notice_id)
     if notice is None:
@@ -345,13 +476,16 @@ async def update_notice(
 
     updates = payload.model_dump(exclude_unset=True)
     resolved = updates.pop("resolved", None)
+    clear_location = updates.pop("clear_location", False)
+    new_location = updates.pop("location", None)
 
     # Checked before anything is mutated: putting a notice back on the board
     # spends allowance, and the guard has to run while the row still counts as
     # resolved.
     if resolved is False and notice.resolved_at is not None:
-        if await _live_count(db, user.id, now) >= MAX_LIVE_NOTICES:
-            raise HTTPException(status_code=409, detail=ALLOWANCE_FULL)
+        limit = max_live_for(await get_account_type(db, user.id))
+        if await _live_count(db, user.id, now) >= limit:
+            raise HTTPException(status_code=409, detail=_allowance_message(limit))
 
     if "expires_at" in updates and updates["expires_at"] is not None:
         # Re-clamped on every edit, so repeated "extend" presses can't walk a
@@ -366,6 +500,11 @@ async def update_notice(
     for field, value in updates.items():
         setattr(notice, field, value)
 
+    if clear_location:
+        notice.location = None
+    elif new_location is not None:
+        notice.location = wkt_point(new_location["lat"], new_location["lng"])
+
     if resolved is True and notice.resolved_at is None:
         notice.resolved_at = now
     elif resolved is False and notice.resolved_at is not None:
@@ -379,22 +518,20 @@ async def update_notice(
     await db.refresh(notice)
 
     profile = await db.scalar(select(Profile).where(Profile.user_id == user.id))
-    reply_count = (
-        await db.scalar(
-            select(func.count())
-            .select_from(NoticeReply)
-            .where(NoticeReply.notice_id == notice.id)
+    return (
+        await _decorate(
+            db,
+            [
+                (
+                    notice,
+                    profile.display_name if profile else None,
+                    profile.account_type if profile else None,
+                    user.org_verified,
+                )
+            ],
+            user,
         )
-        or 0
-    )
-    return _summary(
-        notice,
-        profile.display_name if profile else None,
-        profile.account_type if profile else None,
-        user.org_verified,
-        is_mine=True,
-        reply_count=reply_count,
-    )
+    )[0]
 
 
 @router.delete("/{notice_id}", status_code=204)
@@ -406,6 +543,64 @@ async def delete_notice(notice_id: uuid.UUID, db: DB, user: CurrentUser) -> None
         raise HTTPException(status_code=403, detail="That isn't your notice")
     await db.delete(notice)
     await db.commit()
+
+
+# ---- stars -----------------------------------------------------------------
+#
+# Note what is missing: any way to read the list of people who starred a notice.
+# Only the count is exposed, and the author has no privileged view of it either.
+
+
+async def _star_state(db, notice_id: uuid.UUID, user_id: uuid.UUID) -> StarState:
+    stars = (
+        await db.scalar(
+            select(func.count())
+            .select_from(NoticeStar)
+            .where(NoticeStar.notice_id == notice_id)
+        )
+    ) or 0
+    mine = await db.scalar(
+        select(NoticeStar.id).where(
+            NoticeStar.notice_id == notice_id, NoticeStar.user_id == user_id
+        )
+    )
+    return StarState(starred=mine is not None, stars=stars)
+
+
+@router.put("/{notice_id}/star", response_model=StarState)
+async def star_notice(notice_id: uuid.UUID, db: DB, user: CurrentUser):
+    """Star a notice. Idempotent, and capped at one per account by a unique
+    constraint — starring twice is not an error and does not count twice."""
+    notice = await _get_notice_for_viewer(db, notice_id, user)
+    existing = await db.scalar(
+        select(NoticeStar.id).where(
+            NoticeStar.notice_id == notice.id, NoticeStar.user_id == user.id
+        )
+    )
+    if existing is None:
+        db.add(NoticeStar(notice_id=notice.id, user_id=user.id))
+        await db.commit()
+    # No notification: a star is a quiet signal, and "someone starred your post"
+    # is exactly the kind of ping that turns a board into a slot machine.
+    return await _star_state(db, notice.id, user.id)
+
+
+@router.delete("/{notice_id}/star", response_model=StarState)
+async def unstar_notice(notice_id: uuid.UUID, db: DB, user: CurrentUser):
+    """Take a star back. Also idempotent, so a double-tap is fine."""
+    notice = await _get_notice_for_viewer(db, notice_id, user)
+    star = await db.scalar(
+        select(NoticeStar).where(
+            NoticeStar.notice_id == notice.id, NoticeStar.user_id == user.id
+        )
+    )
+    if star is not None:
+        await db.delete(star)
+        await db.commit()
+    return await _star_state(db, notice.id, user.id)
+
+
+# ---- private replies -------------------------------------------------------
 
 
 @router.get("/{notice_id}/replies", response_model=list[NoticeReplyRead])
@@ -450,6 +645,8 @@ async def reply_to_notice(
     notice = await _get_notice_for_viewer(db, notice_id, user)
     if notice.author_id == user.id:
         raise HTTPException(status_code=409, detail="That's your own notice")
+    if not notice.allow_direct_inquiries:
+        raise HTTPException(status_code=403, detail=INQUIRIES_CLOSED)
     if notice.resolved_at is not None or notice.expires_at <= now:
         raise HTTPException(status_code=409, detail="That notice is closed")
 

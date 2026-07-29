@@ -11,9 +11,17 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.core.email import make_confirm_token
-from app.core.notices import DEFAULT_EXPIRY_DAYS, MAX_EXPIRY_DAYS, MAX_LIVE_NOTICES
+from app.core.notices import (
+    DEFAULT_EXPIRY_DAYS,
+    MAX_EXPIRY_DAYS,
+    MAX_LIVE_NOTICES,
+    MAX_LIVE_NOTICES_ORG,
+    STAR_WINDOW_HOURS,
+)
 from app.main import app
 from tests.conftest import BASE_URL
+
+SUNSET_PARK = {"lat": 40.6552, "lng": -74.0069}
 
 
 def notice_payload(**overrides):
@@ -490,3 +498,379 @@ async def test_a_notice_can_be_reported(board_user):
     )
     assert r.status_code == 201, r.text
     assert r.json()["status"] == "open"
+
+
+# ---- the newer post types --------------------------------------------------
+
+
+@pytest.mark.parametrize("category", ["news", "shoutout", "blog"])
+async def test_anyone_can_post_the_read_and_know_types(board_user, category):
+    author = await board_user("author@example.com")
+    r = await author.post("/api/notices", json=notice_payload(category=category))
+    assert r.status_code == 201, r.text
+    assert r.json()["category"] == category
+
+
+async def test_a_long_form_post_is_accepted(board_user):
+    """A blog needs more room than a giveaway blurb."""
+    author = await board_user("author@example.com")
+    r = await author.post(
+        "/api/notices",
+        json=notice_payload(category="blog", body="The story of our block. " * 200),
+    )
+    assert r.status_code == 201, r.text
+    assert len(r.json()["body"]) > 2000
+
+
+async def test_an_organization_gets_a_bigger_allowance(make_org, community_id):
+    library = await make_org("library@brooklyn.gov", "Sunset Park Library")
+    await library.patch("/api/profiles/me", json={"community_id": community_id})
+
+    meta = (await library.get("/api/notices/meta")).json()
+    assert meta["max_live"] == MAX_LIVE_NOTICES_ORG
+    assert MAX_LIVE_NOTICES_ORG > MAX_LIVE_NOTICES
+
+    # A library really does have more to announce than a neighbour does.
+    for i in range(MAX_LIVE_NOTICES + 1):
+        r = await library.post(
+            "/api/notices", json=notice_payload(category="announcement", title=f"N{i}")
+        )
+        assert r.status_code == 201, r.text
+
+
+# ---- stars -----------------------------------------------------------------
+
+
+async def test_starring_is_one_per_account_and_idempotent(board_user):
+    author = await board_user("author@example.com")
+    a = await board_user("a@example.com")
+    b = await board_user("b@example.com")
+    notice_id = (await author.post("/api/notices", json=notice_payload())).json()["id"]
+
+    r = await a.put(f"/api/notices/{notice_id}/star")
+    assert r.status_code == 200, r.text
+    assert r.json() == {"starred": True, "stars": 1}
+
+    # Starring again is not an error and does not count twice.
+    r = await a.put(f"/api/notices/{notice_id}/star")
+    assert r.json() == {"starred": True, "stars": 1}
+
+    r = await b.put(f"/api/notices/{notice_id}/star")
+    assert r.json() == {"starred": True, "stars": 2}
+
+    # The count is visible to everyone; whose stars they are is visible to nobody.
+    board = (await author.get("/api/notices")).json()
+    assert board[0]["stars"] == 2
+    assert board[0]["i_starred"] is False
+
+
+async def test_a_star_can_be_taken_back(board_user):
+    author = await board_user("author@example.com")
+    fan = await board_user("fan@example.com")
+    notice_id = (await author.post("/api/notices", json=notice_payload())).json()["id"]
+
+    await fan.put(f"/api/notices/{notice_id}/star")
+    r = await fan.delete(f"/api/notices/{notice_id}/star")
+    assert r.json() == {"starred": False, "stars": 0}
+    # Idempotent both ways.
+    r = await fan.delete(f"/api/notices/{notice_id}/star")
+    assert r.json() == {"starred": False, "stars": 0}
+
+
+async def test_i_starred_is_per_viewer(board_user):
+    author = await board_user("author@example.com")
+    fan = await board_user("fan@example.com")
+    other = await board_user("other@example.com")
+    notice_id = (await author.post("/api/notices", json=notice_payload())).json()["id"]
+    await fan.put(f"/api/notices/{notice_id}/star")
+
+    assert (await fan.get(f"/api/notices/{notice_id}")).json()["i_starred"] is True
+    assert (await other.get(f"/api/notices/{notice_id}")).json()["i_starred"] is False
+
+
+async def test_there_is_no_endpoint_that_reveals_who_starred(board_user):
+    """The anonymity is the feature. Asserted so nobody adds a voter list."""
+    author = await board_user("author@example.com")
+    fan = await board_user("fan@example.com")
+    notice_id = (await author.post("/api/notices", json=notice_payload())).json()["id"]
+    await fan.put(f"/api/notices/{notice_id}/star")
+
+    # Not even the author gets a list, and no plausible route exists.
+    for path in (
+        f"/api/notices/{notice_id}/stars",
+        f"/api/notices/{notice_id}/starred-by",
+    ):
+        assert (await author.get(path)).status_code in (404, 405)
+
+    # And no response body anywhere leaks a user id alongside the count.
+    detail = (await author.get(f"/api/notices/{notice_id}")).json()
+    assert detail["stars"] == 1
+    fan_id = (await fan.get("/api/users/me")).json()["id"]
+    assert fan_id not in str(detail)
+
+
+async def test_starring_does_not_notify_the_author(board_user):
+    author = await board_user("author@example.com")
+    fan = await board_user("fan@example.com")
+    notice_id = (await author.post("/api/notices", json=notice_payload())).json()["id"]
+    await fan.put(f"/api/notices/{notice_id}/star")
+
+    # A star is a quiet signal; pinging on it would make the board a slot machine.
+    assert (await author.get("/api/notifications")).json() == []
+
+
+# ---- post of the day -------------------------------------------------------
+
+
+async def _age_stars(notice_id, hours):
+    """Backdate a notice's stars, since there's no API for posting old ones."""
+    from sqlalchemy import update
+
+    from app.core.database import AsyncSessionLocal
+    from app.models import NoticeStar
+
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            update(NoticeStar)
+            .where(NoticeStar.notice_id == notice_id)
+            .values(created_at=datetime.now(timezone.utc) - timedelta(hours=hours))
+        )
+        await session.commit()
+
+
+async def test_post_of_the_day_is_the_most_starred_in_the_window(board_user):
+    author = await board_user("author@example.com")
+    a = await board_user("a@example.com")
+    b = await board_user("b@example.com")
+
+    quiet = (await author.post("/api/notices", json=notice_payload(title="Quiet"))).json()
+    loud = (await author.post("/api/notices", json=notice_payload(title="Loud"))).json()
+
+    await a.put(f"/api/notices/{quiet['id']}/star")
+    await a.put(f"/api/notices/{loud['id']}/star")
+    await b.put(f"/api/notices/{loud['id']}/star")
+
+    r = await author.get("/api/notices/top")
+    assert r.status_code == 200
+    assert r.json()["title"] == "Loud"
+    assert r.json()["stars"] == 2
+
+
+async def test_post_of_the_day_ignores_stars_older_than_the_window(board_user):
+    """A rotating spotlight, not a hall of fame: yesterday's winner steps down."""
+    author = await board_user("author@example.com")
+    a = await board_user("a@example.com")
+    b = await board_user("b@example.com")
+
+    old = (await author.post("/api/notices", json=notice_payload(title="Yesterday"))).json()
+    fresh = (await author.post("/api/notices", json=notice_payload(title="Today"))).json()
+
+    await a.put(f"/api/notices/{old['id']}/star")
+    await b.put(f"/api/notices/{old['id']}/star")
+    await _age_stars(old["id"], STAR_WINDOW_HOURS + 2)
+    await a.put(f"/api/notices/{fresh['id']}/star")
+
+    r = await author.get("/api/notices/top")
+    # "Yesterday" still has more stars all-time, but none of them are recent.
+    assert r.json()["title"] == "Today"
+    assert (await author.get(f"/api/notices/{old['id']}")).json()["stars"] == 2
+
+
+async def test_post_of_the_day_is_null_when_nothing_was_starred(board_user):
+    author = await board_user("author@example.com")
+    await author.post("/api/notices", json=notice_payload())
+    r = await author.get("/api/notices/top")
+    assert r.status_code == 200
+    assert r.json() is None
+
+
+async def test_post_of_the_day_respects_blocks(board_user):
+    author = await board_user("author@example.com")
+    fan = await board_user("fan@example.com")
+    reader = await board_user("reader@example.com")
+    notice_id = (await author.post("/api/notices", json=notice_payload())).json()["id"]
+    await fan.put(f"/api/notices/{notice_id}/star")
+
+    author_id = (await author.get("/api/users/me")).json()["id"]
+    await reader.post("/api/blocks", json={"blocked_id": author_id})
+
+    assert (await reader.get("/api/notices/top")).json() is None
+
+
+# ---- the official section --------------------------------------------------
+
+
+async def test_official_narrows_to_verified_organizations(board_user, make_org, community_id):
+    person = await board_user("person@example.com", "Ada")
+    await person.post("/api/notices", json=notice_payload(title="A neighbour's post"))
+
+    library = await make_org("library@brooklyn.gov", "Sunset Park Library")
+    await library.patch("/api/profiles/me", json={"community_id": community_id})
+    await library.post(
+        "/api/notices",
+        json=notice_payload(category="announcement", title="An official notice"),
+    )
+
+    everything = (await person.get("/api/notices")).json()
+    assert len(everything) == 2
+
+    official = (await person.get("/api/notices?official=true")).json()
+    assert [n["title"] for n in official] == ["An official notice"]
+    assert official[0]["author_verified"] is True
+
+
+# ---- private inquiries toggle ----------------------------------------------
+
+
+async def test_an_author_can_close_replies(board_user):
+    author = await board_user("author@example.com")
+    reader = await board_user("reader@example.com")
+    notice_id = (
+        await author.post(
+            "/api/notices", json=notice_payload(allow_direct_inquiries=False)
+        )
+    ).json()["id"]
+
+    assert (
+        await reader.get(f"/api/notices/{notice_id}")
+    ).json()["allow_direct_inquiries"] is False
+
+    r = await reader.post(f"/api/notices/{notice_id}/replies", json={"body": "Hello?"})
+    assert r.status_code == 403
+    assert "replies" in r.json()["message"].lower()
+
+
+async def test_replies_are_open_by_default(board_user):
+    author = await board_user("author@example.com")
+    reader = await board_user("reader@example.com")
+    notice_id = (await author.post("/api/notices", json=notice_payload())).json()["id"]
+
+    assert (
+        await reader.get(f"/api/notices/{notice_id}")
+    ).json()["allow_direct_inquiries"] is True
+    r = await reader.post(f"/api/notices/{notice_id}/replies", json={"body": "Yes please"})
+    assert r.status_code == 201, r.text
+
+
+async def test_closing_replies_after_the_fact_stops_new_ones(board_user):
+    author = await board_user("author@example.com")
+    early = await board_user("early@example.com")
+    late = await board_user("late@example.com")
+    notice_id = (await author.post("/api/notices", json=notice_payload())).json()["id"]
+
+    assert (
+        await early.post(f"/api/notices/{notice_id}/replies", json={"body": "First!"})
+    ).status_code == 201
+    await author.patch(f"/api/notices/{notice_id}", json={"allow_direct_inquiries": False})
+
+    assert (
+        await late.post(f"/api/notices/{notice_id}/replies", json={"body": "Too late"})
+    ).status_code == 403
+    # The reply already given is still readable by the author.
+    assert len((await author.get(f"/api/notices/{notice_id}/replies")).json()) == 1
+
+
+# ---- map pins --------------------------------------------------------------
+
+
+async def test_a_notice_can_carry_a_map_pin(board_user):
+    author = await board_user("author@example.com")
+    r = await author.post(
+        "/api/notices",
+        json=notice_payload(
+            category="lost_found", title="Lost: grey cat", location=SUNSET_PARK
+        ),
+    )
+    assert r.status_code == 201, r.text
+    loc = r.json()["location"]
+    assert abs(loc["lat"] - SUNSET_PARK["lat"]) < 1e-6
+    assert abs(loc["lng"] - SUNSET_PARK["lng"]) < 1e-6
+
+
+async def test_notices_without_a_pin_have_no_location(board_user):
+    author = await board_user("author@example.com")
+    r = await author.post("/api/notices", json=notice_payload())
+    assert r.json()["location"] is None
+
+
+async def test_the_map_endpoint_returns_only_pinned_notices_nearby(board_user):
+    author = await board_user("author@example.com")
+    await author.post("/api/notices", json=notice_payload(title="Unpinned"))
+    await author.post(
+        "/api/notices", json=notice_payload(title="Pinned here", location=SUNSET_PARK)
+    )
+    await author.post(
+        "/api/notices",
+        json=notice_payload(
+            title="Pinned far away", location={"lat": 40.9, "lng": -73.7}
+        ),
+    )
+
+    r = await author.get(
+        f"/api/notices/map?lat={SUNSET_PARK['lat']}&lng={SUNSET_PARK['lng']}&radius_m=2000"
+    )
+    assert r.status_code == 200, r.text
+    assert [n["title"] for n in r.json()] == ["Pinned here"]
+
+
+async def test_the_map_endpoint_hides_blocked_authors(board_user):
+    author = await board_user("author@example.com")
+    reader = await board_user("reader@example.com")
+    await author.post(
+        "/api/notices", json=notice_payload(title="Pinned", location=SUNSET_PARK)
+    )
+    author_id = (await author.get("/api/users/me")).json()["id"]
+    await reader.post("/api/blocks", json={"blocked_id": author_id})
+
+    r = await reader.get(
+        f"/api/notices/map?lat={SUNSET_PARK['lat']}&lng={SUNSET_PARK['lng']}&radius_m=2000"
+    )
+    assert r.json() == []
+
+
+async def test_a_pin_can_be_moved_and_removed(board_user):
+    author = await board_user("author@example.com")
+    notice_id = (
+        await author.post("/api/notices", json=notice_payload(location=SUNSET_PARK))
+    ).json()["id"]
+
+    moved = {"lat": 40.6600, "lng": -74.0100}
+    r = await author.patch(f"/api/notices/{notice_id}", json={"location": moved})
+    assert abs(r.json()["location"]["lat"] - moved["lat"]) < 1e-6
+
+    # clear_location is an explicit flag: a null "location" in a PATCH is
+    # indistinguishable from "field not sent".
+    r = await author.patch(f"/api/notices/{notice_id}", json={"clear_location": True})
+    assert r.json()["location"] is None
+
+
+# ---- expiry windows --------------------------------------------------------
+
+
+async def test_the_ceiling_is_three_months(board_user):
+    author = await board_user("author@example.com")
+    assert MAX_EXPIRY_DAYS == 90
+    far = datetime.now(timezone.utc) + timedelta(days=400)
+    r = await author.post(
+        "/api/notices", json=notice_payload(expires_at=far.isoformat())
+    )
+    expires = datetime.fromisoformat(r.json()["expires_at"])
+    assert expires <= datetime.now(timezone.utc) + timedelta(days=90, minutes=1)
+
+
+async def test_an_author_can_choose_a_shorter_window(board_user):
+    author = await board_user("author@example.com")
+    soon = datetime.now(timezone.utc) + timedelta(days=7)
+    r = await author.post(
+        "/api/notices", json=notice_payload(expires_at=soon.isoformat())
+    )
+    expires = datetime.fromisoformat(r.json()["expires_at"])
+    assert abs((expires - soon).total_seconds()) < 60
+
+
+async def test_meta_advertises_the_expiry_choices(board_user):
+    author = await board_user("author@example.com")
+    meta = (await author.get("/api/notices/meta")).json()
+    assert meta["default_expiry_days"] == DEFAULT_EXPIRY_DAYS
+    assert 90 in meta["expiry_choices_days"]
+    assert meta["max_body_chars"] >= 8000

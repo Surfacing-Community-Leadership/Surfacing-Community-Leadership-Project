@@ -216,10 +216,68 @@ from the written spec; everything else fills a gap the spec left open.
   list sheet on mobile (`.fab-map`) and sits below the rail's z-index so the
   nav always wins a fight over the same pixels.
 
+## Revisions — 2026-07-29 (notice board v2, user-directed)
+
+A spec round that **reversed four of the previous day's decisions**. Recording
+what changed and why, since the reasoning in the section above is now partly
+superseded.
+
+- **Nine post types, not six.** `news`, `shoutout` and `blog` join the four
+  neighbourly types; `announcement` and `service_change` stay organization-only.
+  The spec's "strictly announcements, news, shoutouts, blogs" reading was *not*
+  taken, on the user's instruction — the giveaway and lost-and-found types are
+  the ones that end at a doorstep, and the spec's own map-pin examples ("road
+  closures, lost pets") depend on them.
+- **Body limit raised to 8000 chars** so a `blog` is actually writable. Long-form
+  types get a two-line card preview instead of three, so one wordy post can't
+  dominate the grid.
+- **Expiry ceiling raised to 3 months, default still 14 days.** The author picks
+  a window (a week / two weeks / a month / three months); the server clamps on
+  create *and* on every edit. The purge the spec asked for is
+  `scripts/purge_notices.py` with a 30-day grace after expiry — a script, not a
+  background task, because the deployment has no scheduler and a sweep inside a
+  web request runs at an unpredictable moment on a user's latency budget.
+- **Allowance is now per account type**: 5 live notices for a person, 15 for an
+  organization. Announcing things *is* the point of a verified account.
+- **Notices can carry an optional location** (`Geography(POINT)`, partial GiST
+  index `WHERE location IS NOT NULL`, since most notices have none). This
+  reverses "never on the map". Served by a **separate** `/api/notices/map`
+  endpoint rather than folded into the events query: a notice has no start time
+  to order by, and keeping them apart means the map's "spots nearby" list can't
+  fill with things nobody can attend. Pins are a muted rounded *square* with an
+  ⓘ — shape, not just colour, so it still reads as "not an event" to someone who
+  can't distinguish the two hues.
+- **Stars, reversing "no engagement metrics".** `notice_stars` with
+  `UNIQUE (notice_id, user_id)` — the uniqueness *is* the one-per-account rule.
+  Three deliberate limits kept the concession narrow: the count is an anonymous
+  aggregate with **no endpoint that lists who starred** (not even for the
+  author — `test_there_is_no_endpoint_that_reveals_who_starred` asserts it),
+  starring **sends no notification** (a ping on a star is what turns a board into
+  a slot machine), and there is no leaderboard — exactly one post is highlighted.
+- **"Post of the day" ranks on a trailing 24-hour window**, not the all-time
+  count, so it rotates rather than accumulating. Ties break toward the newer
+  post. Returns null when nothing was starred recently and the board simply shows
+  no highlight. The all-time count is what's displayed on a card; only the
+  *ranking* uses the window.
+- **`allow_direct_inquiries`** (default true) gates the private reply built the
+  day before. Toggling it off after the fact stops new replies but leaves the
+  ones already received readable — the author asked for quiet, not amnesia.
+- **An "Official" filter, not a pinned band.** Verified organizations get a
+  filter and a black `Official` tag rather than a permanent section at the top of
+  the board, because post-of-the-day already owns that slot and two competing
+  bands would leave no room for the board itself.
+- **Deliberately NOT built:** the Knowledge & Skills Resource Pool. Its spec
+  listed "3 Pillar Categories" and named only one, and the user chose to defer it.
+
 ## Deferred (known gaps to discuss)
 
 - Rate limiting is in the stack but still not wired.
 - Expired access-token rows need a periodic cleanup task.
 - Avatar storage is local disk — swap for object storage before deploying.
-- Expired notices are filtered out of every query but never deleted. Harmless
-  at this scale; a periodic sweep belongs with the access-token cleanup above.
+- `scripts/purge_notices.py` exists but nothing runs it — it needs a scheduler,
+  same as the access-token cleanup above. Until then expired notices are hidden
+  by the query filter and simply accumulate as rows.
+- The Knowledge & Skills Resource Pool is specified but unbuilt: two of its three
+  pillar categories were never named, and its scope (neighbourhood vs city-wide),
+  edit model (author-owned vs wiki) and the meaning of its "verified" badge are
+  all still open.

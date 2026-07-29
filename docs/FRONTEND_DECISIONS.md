@@ -145,6 +145,30 @@ expose something the UI ideally wants; I worked around them and noted each.
   private replies plus "mark it sorted" / "take it down"; everyone else sees a
   single reply box, a character counter, and no hint of who else replied.
 
+## Revisions — 2026-07-29 (notice board v2)
+
+- **The filter strip scrolls sideways rather than wrapping.** Nine post types
+  plus Everything / Official / Yours stacked three rows deep on a phone.
+- **`StarButton` is optimistic and calls `preventDefault`/`stopPropagation`** —
+  the card is a `<Link>`, so starring from inside one would otherwise navigate.
+  A failed request rolls the local count back.
+- **Post of the day is excluded from the grid below it.** Caught in a screenshot:
+  the highlighted notice was also being printed as a normal card, which reads as
+  a bug rather than emphasis.
+- **`LocationPicker` needs `center` and `onPick`.** My first pass passed
+  `onChange` and no centre, so the picker rendered blank and a pin could never be
+  placed — which also left the submit button permanently disabled behind
+  `disabled={pinned && !location}`. Found by looking at the screenshot rather
+  than trusting "the component is on the page"; now verified by clicking the map
+  in the harness and asserting a marker appears and submit enables.
+- **Notice pins are their own `MapView` prop and their own request**, not merged
+  into `events`. They fail soft: a notices error leaves the events showing rather
+  than erroring the map. They also get their own checkbox in the map panel
+  instead of joining the event-kind `<select>`, since a notice is not a kind of
+  event and never enters the "spots nearby" count.
+- **Long-form types get `rows={10}` and a live character counter** in the compose
+  form, and `clamp-2` on the board card.
+
 ## Not done (deferred)
 
 - No automated frontend tests (the backend now has a 200-test pytest suite;

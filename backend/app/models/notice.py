@@ -1,7 +1,9 @@
 import uuid
 from datetime import datetime
 
+from geoalchemy2 import Geography, WKBElement
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -24,15 +26,18 @@ class Notice(Base):
     """A posting on a neighborhood's board.
 
     Separate from events on purpose. An event is an invitation with a time and a
-    place you can stand in; a notice is information, and half of them have
+    place you can stand in; a notice is information, and many of them have
     neither ("water main work on 5th all week"). Sharing the events table would
-    mean carrying NOT NULL starts_at/location that don't apply, plus inheriting
+    mean carrying a NOT NULL starts_at that doesn't apply, plus inheriting
     RSVPs, capacity and the trust tallies — every one of which would need a
     "unless it's a notice" carve-out.
 
-    No geography column: the board is scoped by community_id, not by radius, so
+    Reading the board never involves geography: it is scoped by community_id, so
     everyone in a neighborhood reads the same board rather than a personalized
-    slice of one. A rough `place_hint` string covers "corner of 44th and 5th".
+    radius. `location` does a different job — dropping an informational pin on
+    the map for something area-bound (a road closure, a lost cat). It is
+    optional and most notices have none; `place_hint` ("the bench by the
+    playground") is often more use to a neighbour than a coordinate anyway.
     """
 
     __tablename__ = "notices"
@@ -42,6 +47,14 @@ class Notice(Base):
         Index("ix_notices_community_expires", "community_id", "expires_at"),
         # Enforcing the per-author allowance means counting an author's live rows.
         Index("ix_notices_author", "author_id"),
+        # The map query. Partial, because only a minority of notices are pinned,
+        # and a GiST index over mostly-NULL rows is wasted pages.
+        Index(
+            "ix_notices_location",
+            "location",
+            postgresql_using="gist",
+            postgresql_where=text("location IS NOT NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -61,9 +74,20 @@ class Notice(Base):
     category: Mapped[str] = mapped_column(Text)
     title: Mapped[str] = mapped_column(Text)
     body: Mapped[str] = mapped_column(Text)
-    # Free text, not coordinates — "the bench by the playground" is more useful
-    # to a neighbor than a pin, and notices never appear on the map.
+    # Free text alongside the optional coordinate below — "the bench by the
+    # playground" beats a pin for a human, even when both are present.
     place_hint: Mapped[str | None] = mapped_column(Text)
+    # Optional: when set, the notice also drops an informational pin on the map.
+    # spatial_index=False because the partial GiST index is declared above.
+    location: Mapped[WKBElement | None] = mapped_column(
+        Geography(geometry_type="POINT", srid=4326, spatial_index=False)
+    )
+    # Whether a neighbour may send the author a private reply. Default true: the
+    # board's whole point is that a notice can be answered. Turning it off is
+    # for the announcement nobody needs to respond to.
+    allow_direct_inquiries: Mapped[bool] = mapped_column(
+        Boolean, server_default=text("true")
+    )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     # Set when the author marks it done: the couch is gone, the cat came home.
     # Lets a notice stop lying without waiting out its expiry.
@@ -76,6 +100,43 @@ class Notice(Base):
     )
 
 
+class NoticeStar(Base):
+    """One person marking one notice as worth reading.
+
+    Stars are reported ONLY as an aggregate count. There is no endpoint that
+    lists who starred what — not even to the notice's author — which is why this
+    table has no read path beyond counting. That is the difference between "this
+    was useful" and a popularity contest with names attached, and it's the only
+    reason a board can carry a number at all without becoming a scoreboard.
+
+    created_at is load-bearing, not bookkeeping: "post of the day" ranks by
+    stars earned in a trailing window, so a good post from this morning can
+    still beat last month's most-starred one.
+    """
+
+    __tablename__ = "notice_stars"
+    __table_args__ = (
+        # One star per person per notice. The uniqueness IS the rule — without
+        # it a single account could inflate a count without limit.
+        UniqueConstraint("notice_id", "user_id", name="uq_notice_stars_user"),
+        # Counting a notice's stars, and counting only recent ones.
+        Index("ix_notice_stars_notice_created", "notice_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    notice_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("notices.id", ondelete="CASCADE")
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
+
+
 class NoticeReply(Base):
     """A private one-liner to whoever posted the notice.
 
@@ -83,6 +144,9 @@ class NoticeReply(Base):
     by design — open comments are the specific mechanism that turns neighborhood
     feeds into argument venues — but "I'd like the couch" has to reach somebody,
     so it arrives as a notification instead.
+
+    Whether a notice accepts them at all is the author's call, via
+    `Notice.allow_direct_inquiries`.
     """
 
     __tablename__ = "notice_replies"

@@ -984,8 +984,104 @@
   font-size: 14px;
   margin-bottom: 22px;
 }
+/* Nine post types plus Everything / Official / Yours would stack three rows
+   deep on a phone, so the strip scrolls sideways instead of wrapping. */
 .org .board-filters {
   margin-bottom: 22px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
+}
+.org .board-filters::-webkit-scrollbar {
+  display: none;
+}
+.org .board-filters .pill-tab {
+  flex: 0 0 auto;
+}
+
+/* ---- Post of the day ----------------------------------------------------
+   The single piece of prominence on the board. Ranked on stars from the last
+   24 hours only, so it rotates instead of accumulating — a spotlight, not a
+   leaderboard. There is no second or third place anywhere in the UI. */
+.org .potd {
+  margin-bottom: 30px;
+}
+.org .potd-kicker {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-accent-700);
+  margin-bottom: 10px;
+}
+.org .potd-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 28px 30px;
+  border-radius: 30px;
+  border-left: 5px solid var(--nc-accent, var(--color-accent));
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.16s ease;
+}
+.org .potd-card:hover {
+  transform: translateY(-2px);
+  color: inherit;
+}
+.org .potd-card h2 {
+  margin: 0;
+}
+.org .potd-card .notice-body {
+  -webkit-line-clamp: 4;
+}
+.org .potd-foot {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 12px;
+  font-size: 12px;
+}
+
+/* ---- Stars --------------------------------------------------------------
+   A count, never a list of names. Nothing in this component or its API can
+   reveal who starred — that's what separates "this was useful" from a
+   popularity contest. */
+.org .star-btn,
+.star-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border: 1px solid var(--color-divider);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-neutral-700);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+}
+.org .star-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent-700);
+}
+.org .star-btn.on {
+  background: var(--color-accent-100);
+  border-color: var(--color-accent);
+  color: var(--color-accent-800);
+}
+.org .star-lg {
+  padding: 8px 16px;
+  font-size: 15px;
+}
+.org .star-count {
+  font-variant-numeric: tabular-nums;
 }
 .org .board-empty {
   padding: 28px 0;
@@ -1064,6 +1160,11 @@
 .org .nc-service_change {
   --nc-accent: #a8762b;
 }
+.org .nc-news,
+.org .nc-shoutout,
+.org .nc-blog {
+  --nc-accent: var(--color-neutral-400, #b7ab95);
+}
 .org .tag-giveaway,
 .org .tag-offer_help {
   background: var(--color-accent-2-100);
@@ -1078,6 +1179,19 @@
 .org .tag-service_change {
   background: #f5e6c8;
   color: #6b4a15;
+}
+/* The read-and-know types share a neutral treatment: they're for reading, not
+   for acting on, and shouldn't compete with the offers and asks. */
+.org .tag-news,
+.org .tag-shoutout,
+.org .tag-blog {
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-800);
+}
+/* The municipal/institutional marker on a verified organization's post. */
+.org .tag-official {
+  background: var(--color-text);
+  color: var(--color-bg);
 }
 
 /* The compose form, tinted by category the same way the event form is. */
@@ -1185,6 +1299,28 @@
 .org .notice-report {
   margin-top: 22px;
   font-size: 13px;
+}
+.org .notice-card-foot {
+  margin-top: 2px;
+}
+.org .notice-detail-foot {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-divider);
+  font-size: 12px;
+}
+.org .notice-inquiry-toggle {
+  margin-top: 14px;
+  font-size: 13px;
+}
+/* A longer piece gets a tighter preview on the board than a giveaway does, so
+   one wordy post can't dominate the grid. */
+.org .notice-body.clamp-2 {
+  -webkit-line-clamp: 2;
 }
 
 /* ---- Auth split-screen (Login / Register) ------------------------------ */

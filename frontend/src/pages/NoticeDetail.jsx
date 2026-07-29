@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client.js";
 import { useApi } from "../hooks/useApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
+import StarButton from "../components/StarButton.jsx";
 import { categoryLabel, timeLeft } from "../lib/noticeCategories.js";
 
 const MAX_REPLY_CHARS = 280;
@@ -56,6 +57,7 @@ export default function NoticeDetail() {
           <span className={`tag tag-${notice.category}`}>
             {categoryLabel(notice.category)}
           </span>
+          {notice.author_verified && <span className="tag tag-official">Official</span>}
           {notice.resolved && <span className="tag tag-neutral">Sorted</span>}
         </div>
         <h1>{notice.title}</h1>
@@ -72,6 +74,18 @@ export default function NoticeDetail() {
           </Link>
           {notice.place_hint && <span>{notice.place_hint}</span>}
           <span>{timeLeft(notice.expires_at)}</span>
+          {notice.location && (
+            <Link to="/map" title="See it on the map">
+              ◎ On the map
+            </Link>
+          )}
+        </div>
+        <div className="notice-detail-foot">
+          <StarButton notice={notice} size="lg" />
+          <span className="muted">
+            Stars are counted, never named — nobody sees who starred, including
+            whoever posted it.
+          </span>
         </div>
       </div>
 
@@ -154,6 +168,22 @@ function AuthorView({ notice, onChanged, onDeleted }) {
           Marking it sorted frees up one of your slots and keeps it readable for
           a while. Taking it down removes it and its replies for good.
         </p>
+        <label className="checkbox notice-inquiry-toggle">
+          <input
+            type="checkbox"
+            checked={notice.allow_direct_inquiries}
+            disabled={busy}
+            onChange={(e) =>
+              act(async () => {
+                await api.patch(`/api/notices/${notice.id}`, {
+                  allow_direct_inquiries: e.target.checked,
+                });
+                await onChanged();
+              })
+            }
+          />
+          Let neighbors send me a private reply
+        </label>
       </div>
 
       <h2 className="notice-replies-head">Replies</h2>
@@ -221,6 +251,30 @@ function ReplyBox({ notice, closed, onSent }) {
           See what else is up
         </Link>
       </div>
+    );
+  }
+
+  // The author turned replies off. Say so plainly rather than showing a box
+  // that would fail on submit.
+  if (!notice.allow_direct_inquiries) {
+    return (
+      <>
+        <div className="notice-closed">
+          <p className="muted">
+            {notice.author_name || "Whoever posted this"} isn't taking replies on
+            this one — it's here to be read.
+          </p>
+        </div>
+        <div className="notice-report">
+          {reporting ? (
+            <ReportNotice notice={notice} onDone={() => setReporting(false)} />
+          ) : (
+            <button className="link-button" onClick={() => setReporting(true)}>
+              Report this notice
+            </button>
+          )}
+        </div>
+      </>
     );
   }
 

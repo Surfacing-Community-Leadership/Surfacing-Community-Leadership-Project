@@ -1,10 +1,10 @@
 // How each kind of notice is named and described, in one place so the board,
-// the filter tabs and the compose form can never drift apart. The server owns
-// which of these a given account may actually post — see /api/notices/meta —
-// this file only says how they read.
+// the filter tabs, the map pins and the compose form can never drift apart. The
+// server owns which of these a given account may actually post — see
+// /api/notices/meta — this file only says how they read.
 //
-// There is deliberately no crime-or-safety category. See the module docstring
-// in backend/app/core/notices.py for the reasoning.
+// There is deliberately no crime-or-safety type. See the module docstring in
+// backend/app/core/notices.py for the reasoning.
 
 export const NOTICE_CATEGORIES = {
   giveaway: {
@@ -17,6 +17,8 @@ export const NOTICE_CATEGORIES = {
     label: "Lost & found",
     short: "Lost & found",
     hint: "What was lost or found, and roughly where.",
+    // Types where a map pin genuinely helps get the compass prompt in the form.
+    suggestsPin: true,
   },
   recommendation: {
     label: "Looking for a recommendation",
@@ -27,6 +29,23 @@ export const NOTICE_CATEGORIES = {
     label: "Offering a hand",
     short: "Offering",
     hint: "What you can help with, and when you're usually around.",
+  },
+  news: {
+    label: "Local news",
+    short: "News",
+    hint: "What happened, where, and why it matters to people here.",
+    longForm: true,
+  },
+  shoutout: {
+    label: "Shoutout",
+    short: "Shoutout",
+    hint: "Who deserves the credit, and what they did.",
+  },
+  blog: {
+    label: "A longer piece",
+    short: "Writing",
+    hint: "Take the space you need — a story, a reflection, a write-up.",
+    longForm: true,
   },
   announcement: {
     label: "Announcement",
@@ -39,8 +58,13 @@ export const NOTICE_CATEGORIES = {
     short: "Change",
     hint: "What's changing, where, and for how long.",
     orgOnly: true,
+    suggestsPin: true,
   },
 };
+
+// Filter strip order. Keeps the "somebody wants / is offering something" types
+// first, since those are the ones that end at a doorstep.
+export const CATEGORY_ORDER = Object.keys(NOTICE_CATEGORIES);
 
 export function categoryLabel(category) {
   return NOTICE_CATEGORIES[category]?.label ?? "Notice";
@@ -52,6 +76,14 @@ export function categoryShort(category) {
 
 export function categoryHint(category) {
   return NOTICE_CATEGORIES[category]?.hint ?? "";
+}
+
+export function isLongForm(category) {
+  return Boolean(NOTICE_CATEGORIES[category]?.longForm);
+}
+
+export function suggestsPin(category) {
+  return Boolean(NOTICE_CATEGORIES[category]?.suggestsPin);
 }
 
 // Turns "2026-08-10T…" into "3 days left" — the board leads with how long
