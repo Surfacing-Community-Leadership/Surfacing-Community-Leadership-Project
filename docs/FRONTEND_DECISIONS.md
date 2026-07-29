@@ -217,6 +217,25 @@ expose something the UI ideally wants; I worked around them and noted each.
   `HTMLSelectElement.prototype` and a `change` event — same trap as the text
   inputs, different prototype.
 
+## Revisions — 2026-07-29, round five ("Mark it sorted" removed)
+
+- **"Mark it sorted" and "Put it back up" are gone from the author's panel.**
+  Nobody could tell what "sorted" meant, and the concept was doing two jobs at
+  once (freeing an allowance slot, and closing a post to replies) behind one
+  opaque verb. The panel is now just **Edit** and **Take it down**, with Edit
+  promoted to the primary button since it's the one an author reaches for.
+- **The word "sorted" is gone from the interface entirely** — the tag reads
+  "Closed" and the closed-post message says "the author closed it". Half-removing
+  vocabulary is worse than not removing it.
+- **`resolved_at` stays in the schema and on the API.** Nothing in the app sets
+  it any more, so those renderings are defensive (an admin or a direct API call
+  could still close a post). Ripping out the column would mean a destructive
+  migration for a label problem.
+- **Consequence, deliberately accepted:** an author who is finished with a post
+  now either takes it down or waits for it to expire. Taking it down is
+  permanent and removes the replies — the hint text says so plainly rather than
+  leaving someone to find out.
+
 ## Not done (deferred)
 
 - No automated frontend tests (the backend now has a 200-test pytest suite;

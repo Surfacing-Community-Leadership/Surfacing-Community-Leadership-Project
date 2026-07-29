@@ -258,7 +258,7 @@ function NoticeCard({ notice }) {
             ◎ On the map
           </span>
         )}
-        {notice.resolved && <span className="tag tag-neutral">Sorted</span>}
+        {notice.resolved && <span className="tag tag-neutral">Closed</span>}
       </div>
       <h3>{notice.title}</h3>
       <p className={isLongForm(notice.category) ? "notice-body clamp-2" : "notice-body"}>

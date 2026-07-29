@@ -59,7 +59,7 @@ export default function NoticeDetail() {
             {categoryLabel(notice.category)}
           </span>
           {notice.author_verified && <span className="tag tag-official">Official</span>}
-          {notice.resolved && <span className="tag tag-neutral">Sorted</span>}
+          {notice.resolved && <span className="tag tag-neutral">Closed</span>}
         </div>
         <h1>{notice.title}</h1>
         <p className="notice-detail-body">{notice.body}</p>
@@ -147,36 +147,13 @@ function AuthorView({ notice, onChanged, onDeleted }) {
       <div className="notice-owner-bar">
         {actionError && <div className="alert">{actionError}</div>}
         <div className="row-actions">
-          <button className="btn btn-secondary" onClick={() => setEditing(true)}>
+          <button className="btn btn-primary" onClick={() => setEditing(true)}>
             Edit
           </button>
-          {notice.resolved ? (
-            <button
-              className="btn btn-secondary"
-              disabled={busy}
-              onClick={() =>
-                act(async () => {
-                  await api.patch(`/api/notices/${notice.id}`, { resolved: false });
-                  await onChanged();
-                })
-              }
-            >
-              Put it back up
-            </button>
-          ) : (
-            <button
-              className="btn btn-primary"
-              disabled={busy}
-              onClick={() =>
-                act(async () => {
-                  await api.patch(`/api/notices/${notice.id}`, { resolved: true });
-                  await onChanged();
-                })
-              }
-            >
-              Mark it sorted
-            </button>
-          )}
+          {/* "Mark it sorted" used to sit here. Removed: nobody could tell what
+              it meant, and a post that's done can be taken down or simply left
+              to expire. The resolved flag still exists on the API for
+              moderation, but the board no longer asks anyone to think about it. */}
           <button
             className="btn btn-secondary danger"
             disabled={busy}
@@ -191,8 +168,8 @@ function AuthorView({ notice, onChanged, onDeleted }) {
           </button>
         </div>
         <p className="field-hint">
-          Marking it sorted frees up one of your slots and keeps it readable for
-          a while. Taking it down removes it and its replies for good.
+          It comes down on its own when it expires. Taking it down now removes it
+          and its replies for good, and frees one of your slots.
         </p>
         <label className="checkbox notice-inquiry-toggle">
           <input
@@ -271,7 +248,7 @@ function ReplyBox({ notice, closed, onSent }) {
     return (
       <div className="notice-closed">
         <p className="muted">
-          This one's closed — {notice.resolved ? "it's been sorted" : "it expired"}.
+          This one's closed — {notice.resolved ? "the author closed it" : "it expired"}.
         </p>
         <Link className="btn btn-secondary" to="/board">
           See what else is up
