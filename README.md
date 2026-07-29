@@ -53,11 +53,13 @@ If we succeed, people need the app less and less over time. That's the point.
 - **The community board** — a per-neighborhood board for things worth knowing
   that aren't invitations: giveaways, lost & found, asks, offers, local news,
   shoutouts, longer write-ups, plus official announcements and service changes
-  from verified organizations. Three tabs — Posts, Organizations, My posts.
-  Deliberately low-noise: everything expires (two weeks by default, three months
-  at most), each person gets five live posts at a time, replies go privately to
-  whoever posted and only if they left inquiries open, and there are **no comment
-  threads anywhere**. Posts can optionally drop an informational pin on the map.
+  from verified organizations. Three tabs — Posts, Organizations, My posts — and
+  six posts to a page rather than an endless scroll. Deliberately low-noise:
+  everything expires (two weeks by default, three months at most), each person
+  gets five live posts at a time, replies go privately to whoever posted and only
+  if they left inquiries open, and there are **no comment threads anywhere**.
+  Whereabouts suggests addresses as you type, and picking one drops the map pin
+  there automatically.
   A star marks a post as useful — counted as an anonymous aggregate, never as a
   list of names, and one highlighted "post of the day" rotates on a 24-hour
   window rather than accumulating. There is no crime-and-safety type, which is a

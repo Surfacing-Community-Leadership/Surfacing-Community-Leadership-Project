@@ -373,6 +373,7 @@ async def list_notices(
     source: Annotated[str, Query()] = "all",
     mine: Annotated[bool, Query()] = False,
     include_resolved: Annotated[bool, Query()] = False,
+    exclude_id: Annotated[uuid.UUID | None, Query()] = None,
     limit: Annotated[int, Query(gt=0, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ):
@@ -382,6 +383,10 @@ async def list_notices(
     "organizations" for posts from verified institutions, "all" for both.
     `mine=true` returns your own posts whatever their state, since you need to
     see an expired one to manage it.
+
+    `exclude_id` drops one post from the results. The board highlights the post
+    of the day above the list, and filtering it out client-side would leave that
+    page one short — excluding it here keeps every page the same size.
     """
     if source not in SOURCES:
         raise HTTPException(
@@ -407,6 +412,8 @@ async def list_notices(
     # on, so the source split doesn't apply to it.
     if not mine:
         query = _apply_source(query, source)
+    if exclude_id is not None:
+        query = query.where(Notice.id != exclude_id)
     if category is not None:
         query = query.where(Notice.category == category)
 

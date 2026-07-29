@@ -1081,6 +1081,21 @@
   font-size: 13px;
 }
 
+/* Pages, not infinite scroll. Reaching the end of a page is a natural place to
+   stop reading, which is the point of a board you visit rather than a feed. */
+.org .board-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 26px;
+}
+.org .board-pager .muted {
+  font-size: 13px;
+  min-width: 5.5em;
+  text-align: center;
+}
+
 /* One post per row. A post is something you read, so it gets the full column
    width instead of being clipped into a tile — the same shape as the highlight
    above it, minus the tint that marks that one out. */
@@ -1148,15 +1163,14 @@
   color: var(--color-accent-700);
 }
 
-/* Category accents. Giveaways and offers lean sage (something is on offer);
-   asks and losses lean terracotta (somebody needs a hand); the two org-only
-   kinds take the warm ochre that volunteer work already uses. */
-.org .nc-giveaway,
-.org .nc-offer_help {
+/* Type accents. A giveaway leans sage (something is on offer); a loss or a
+   question leans terracotta (somebody needs something); the two org-only kinds
+   take the warm ochre that volunteer work already uses. */
+.org .nc-giveaway {
   --nc-accent: var(--color-accent-2);
 }
 .org .nc-lost_found,
-.org .nc-recommendation {
+.org .nc-question {
   --nc-accent: var(--color-accent);
 }
 .org .nc-announcement,
@@ -1168,13 +1182,12 @@
 .org .nc-blog {
   --nc-accent: var(--color-neutral-400, #b7ab95);
 }
-.org .tag-giveaway,
-.org .tag-offer_help {
+.org .tag-giveaway {
   background: var(--color-accent-2-100);
   color: var(--color-accent-2-800);
 }
 .org .tag-lost_found,
-.org .tag-recommendation {
+.org .tag-question {
   background: var(--color-accent-100);
   color: var(--color-accent-800);
 }
@@ -1184,7 +1197,7 @@
   color: #6b4a15;
 }
 /* The read-and-know types share a neutral treatment: they're for reading, not
-   for acting on, and shouldn't compete with the offers and asks. */
+   for acting on, and shouldn't compete with the giveaways and questions. */
 .org .tag-news,
 .org .tag-shoutout,
 .org .tag-blog {
@@ -1207,8 +1220,7 @@
 .org .notice-form h2 {
   margin-top: 0;
 }
-.org .notice-form.form-giveaway,
-.org .notice-form.form-offer_help {
+.org .notice-form.form-giveaway {
   --color-accent: var(--color-accent-2);
   --color-accent-600: var(--color-accent-2-600);
   --color-accent-700: var(--color-accent-2-700);

@@ -301,6 +301,40 @@ superseded.
   same shape as the highlight above it, minus that one's tint — a post is
   something you read, and a tile clips the words.
 
+## Revisions — 2026-07-29, round three (paging, six types, address pins)
+
+- **Six person post types, fixed by name**: Giveaway, Lost & Found, Question,
+  Local news, Shoutout, Writing. `recommendation` was renamed to `question`, and
+  `offer_help` was retired. Organizations keep Announcement and Service change on
+  top of those six — a closure notice from a library is genuinely a different
+  thing from local news, and the Organizations tab filters by author rather than
+  by type, so it works either way.
+- **Rows are reclassified, never deleted.** Migration `d1a7c46e9b25` moves
+  `recommendation` → `question` and `offer_help` → `blog`. Order matters and I got
+  it wrong first: the CHECK has to come off *before* the UPDATE, because the old
+  constraint doesn't know `question` yet and rejects the first row. `offer_help`
+  has no exact survivor, so `blog` is used as the general-purpose type rather than
+  as a claim about the content, and the downgrade doesn't try to restore it
+  (nothing recorded which rows they were).
+- **The board pages at six**, with Newer/Older rather than infinite scroll.
+  Reaching the end of a page is a natural place to stop reading, which is the
+  whole point of a board you visit instead of a feed.
+- **`exclude_id` was added to the list endpoint** so paging stays exact. The
+  post of the day is rendered above the list; filtering it out client-side left
+  whichever page contained it one post short. The client also fetches
+  `PAGE_SIZE + 1` rows purely to answer "is there a next page?" without a second
+  count query — the extra row is never rendered.
+- **The post of the day only appears on page 1** of the Posts tab. It isn't a
+  header for page 3.
+- **Whereabouts is now an address autocomplete that drives the map pin.**
+  Picking a suggestion fills the text, ticks "also drop a pin", and places the
+  pin at that coordinate — still draggable by clicking the map, since a street
+  address is usually only approximately the spot. Free text still works
+  unchanged: "the bench by the playground" is often more use to a neighbour than
+  an address, so the geocoder suggests rather than insists. Typing over a chosen
+  address discards its coordinates, and ticking the pin box later reuses them if
+  they're still valid.
+
 ## Deferred (known gaps to discuss)
 
 - Rate limiting is in the stack but still not wired.

@@ -8,27 +8,22 @@
 
 export const NOTICE_CATEGORIES = {
   giveaway: {
-    label: "Free to a good home",
-    short: "Free",
+    label: "Giveaway",
+    short: "Giveaway",
     // The prompt does real work here: a vague giveaway wastes everyone's time.
     hint: "What it is, what condition it's in, and how someone can collect it.",
   },
   lost_found: {
-    label: "Lost & found",
+    label: "Lost & Found",
     short: "Lost & found",
     hint: "What was lost or found, and roughly where.",
     // Types where a map pin genuinely helps get the compass prompt in the form.
     suggestsPin: true,
   },
-  recommendation: {
-    label: "Looking for a recommendation",
-    short: "Asking",
-    hint: "What you need and anything that narrows it down.",
-  },
-  offer_help: {
-    label: "Offering a hand",
-    short: "Offering",
-    hint: "What you can help with, and when you're usually around.",
+  question: {
+    label: "Question",
+    short: "Question",
+    hint: "What you need to know, and anything that narrows it down.",
   },
   news: {
     label: "Local news",
@@ -42,7 +37,7 @@ export const NOTICE_CATEGORIES = {
     hint: "Who deserves the credit, and what they did.",
   },
   blog: {
-    label: "A longer piece",
+    label: "Writing",
     short: "Writing",
     hint: "Take the space you need — a story, a reflection, a write-up.",
     longForm: true,

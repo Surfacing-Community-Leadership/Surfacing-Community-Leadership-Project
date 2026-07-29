@@ -930,3 +930,75 @@ async def test_meta_advertises_the_expiry_choices(board_user):
     assert meta["default_expiry_days"] == DEFAULT_EXPIRY_DAYS
     assert 90 in meta["expiry_choices_days"]
     assert meta["max_body_chars"] >= 8000
+
+
+# ---- the post types after the rename ---------------------------------------
+
+
+async def test_question_replaces_recommendation(board_user):
+    author = await board_user("author@example.com")
+    r = await author.post("/api/notices", json=notice_payload(category="question"))
+    assert r.status_code == 201, r.text
+    assert r.json()["category"] == "question"
+
+
+@pytest.mark.parametrize("retired", ["recommendation", "offer_help"])
+async def test_retired_post_types_are_rejected(board_user, retired):
+    """`recommendation` became `question` and `offer_help` was dropped. Asserted
+    so neither quietly comes back through a stale client."""
+    author = await board_user("author@example.com")
+    r = await author.post("/api/notices", json=notice_payload(category=retired))
+    assert r.status_code == 422
+
+
+async def test_meta_offers_exactly_the_six_person_types(board_user):
+    author = await board_user("author@example.com")
+    meta = (await author.get("/api/notices/meta")).json()
+    assert meta["categories"] == [
+        "giveaway",
+        "lost_found",
+        "question",
+        "news",
+        "shoutout",
+        "blog",
+    ]
+
+
+# ---- paging ----------------------------------------------------------------
+
+
+async def test_exclude_id_drops_one_post_so_pages_stay_full(board_user):
+    """The board shows the post of the day above the list and asks the server to
+    leave it out, so a page is never one short."""
+    author = await board_user("author@example.com")
+    ids = []
+    for i in range(MAX_LIVE_NOTICES):
+        r = await author.post("/api/notices", json=notice_payload(title=f"Post {i}"))
+        ids.append(r.json()["id"])
+
+    everything = (await author.get("/api/notices")).json()
+    assert len(everything) == MAX_LIVE_NOTICES
+
+    trimmed = (await author.get(f"/api/notices?exclude_id={ids[0]}")).json()
+    assert len(trimmed) == MAX_LIVE_NOTICES - 1
+    assert ids[0] not in [n["id"] for n in trimmed]
+
+
+async def test_limit_and_offset_page_without_overlap(board_user):
+    author = await board_user("author@example.com")
+    for i in range(MAX_LIVE_NOTICES):
+        await author.post("/api/notices", json=notice_payload(title=f"Post {i}"))
+
+    first = (await author.get("/api/notices?limit=2&offset=0")).json()
+    second = (await author.get("/api/notices?limit=2&offset=2")).json()
+    assert len(first) == 2 and len(second) == 2
+    # Newest-first and stable, so the two pages must not share a post.
+    assert {n["id"] for n in first}.isdisjoint({n["id"] for n in second})
+
+
+async def test_paging_past_the_end_is_empty_not_an_error(board_user):
+    author = await board_user("author@example.com")
+    await author.post("/api/notices", json=notice_payload())
+    r = await author.get("/api/notices?limit=6&offset=60")
+    assert r.status_code == 200
+    assert r.json() == []

@@ -182,6 +182,23 @@ expose something the UI ideally wants; I worked around them and noted each.
   screenshot, not by the overflow measurement, which stayed at 0 because the text
   was clipping inside its container rather than widening the document.
 
+## Revisions — 2026-07-29, round three (paging + address pins)
+
+- **`PAGE_SIZE = 6`, and the page resets to 0 on a tab change** — page 4 of Posts
+  is not page 4 of Organizations. `hasNext` comes from fetching one extra row, so
+  there's no count query and the pager never shows a dead "Older" button.
+- **`addressPoint` is tracked separately from `location`.** A picked address's
+  coordinates have to survive the author *not* having ticked the pin box yet, so
+  ticking it later can still use them. Typing over the address clears them,
+  because they no longer describe what's in the field.
+- **Driving `AddressAutocomplete` in the test harness needs the native value
+  setter.** A plain `input.value = "..."` doesn't fire React's `onChange`, so the
+  debounce never runs and no suggestion ever appears. Worth recording because it
+  looked exactly like a broken component the first time.
+- Nominatim needs **~5 seconds**, not 2, before suggestions land in a headless
+  run. My first attempt reported "no suggestions" purely because I didn't wait
+  long enough — the component was fine.
+
 ## Not done (deferred)
 
 - No automated frontend tests (the backend now has a 200-test pytest suite;

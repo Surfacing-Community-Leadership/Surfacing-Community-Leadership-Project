@@ -30,14 +30,12 @@ to the whole neighborhood is not a feature of this product.
 
 from datetime import datetime, timedelta
 
-# What anyone may post. Ordered as they should appear in the UI: the two
-# "somebody needs / is offering something" types first, since those are the ones
-# that end in a doorstep handover, then the read-and-know ones.
+# What anyone may post. Ordered as they should appear in the UI: the ones that
+# end in a doorstep handover first, then the read-and-know ones.
 PERSON_CATEGORIES = (
     "giveaway",        # free to a good home — the type that forces a handoff
     "lost_found",      # lost or found: a cat, a set of keys
-    "recommendation",  # asking neighbors for local know-how
-    "offer_help",      # a standing offer of a skill or a spare hour
+    "question",        # asking neighbors for local know-how
     "news",            # something that happened around here
     "shoutout",        # thanks or credit where it's due
     "blog",            # a longer piece: a story, a reflection, a write-up

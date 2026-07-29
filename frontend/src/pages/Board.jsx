@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client.js";
 import { useApi } from "../hooks/useApi.js";
+import AddressAutocomplete from "../components/AddressAutocomplete.jsx";
 import CommunityPicker from "../components/CommunityPicker.jsx";
 import LocationPicker from "../components/LocationPicker.jsx";
 import StarButton from "../components/StarButton.jsx";
@@ -33,20 +34,43 @@ const TABS = [
   { key: "mine", label: "My posts" },
 ];
 
+// A page, not an endless scroll. Six is enough to scan without the board
+// becoming something you fall down.
+const PAGE_SIZE = 6;
+
 export default function Board() {
   const [tab, setTab] = useState("posts");
+  const [page, setPage] = useState(0);
   const [composing, setComposing] = useState(false);
 
   const meta = useApi(() => api.get("/api/notices/meta"));
   const top = useApi(() => api.get("/api/notices/top"));
+
+  // The highlight is shown above the list on the Posts tab, so the server drops
+  // it from the results — filtering it out here instead would leave whichever
+  // page contains it one post short.
+  const excludeId = tab === "posts" ? top.data?.id : null;
+
   const board = useApi(() => {
     const params = new URLSearchParams();
     if (tab === "mine") params.set("mine", "true");
     else params.set("source", tab);
+    if (excludeId) params.set("exclude_id", excludeId);
+    // One extra row is fetched purely to answer "is there a next page?" without
+    // a second count query. It is never rendered.
+    params.set("limit", String(PAGE_SIZE + 1));
+    params.set("offset", String(page * PAGE_SIZE));
     return api.get(`/api/notices?${params}`);
-  }, [tab]);
+  }, [tab, page, excludeId]);
+
+  function changeTab(next) {
+    setTab(next);
+    // Page 4 of Posts is not page 4 of Organizations.
+    setPage(0);
+  }
 
   async function refresh() {
+    setPage(0);
     await Promise.all([meta.reload(), board.reload(), top.reload()]);
   }
 
@@ -65,12 +89,11 @@ export default function Board() {
   // The highlight lives above the Posts tab — the board's front page. It ranks
   // across the whole board, so the winner can be an organization's post; it's
   // labelled "post of the day", not "a neighbour's post", so that's honest.
-  const showTop = tab === "posts" && top.data;
-  // Don't print the same post twice: when it's highlighted above, it comes out
-  // of the list rather than appearing in both places.
-  const listed = showTop
-    ? (board.data || []).filter((n) => n.id !== top.data.id)
-    : board.data || [];
+  // Only on the first page: it isn't a header for page 3.
+  const showTop = tab === "posts" && page === 0 && top.data;
+  const fetched = board.data || [];
+  const hasNext = fetched.length > PAGE_SIZE;
+  const listed = fetched.slice(0, PAGE_SIZE);
 
   return (
     <div className="org wide">
@@ -119,7 +142,7 @@ export default function Board() {
 
       {showTop && <PostOfTheDay notice={top.data} onStar={() => top.reload()} />}
 
-      <Tabs value={tab} onChange={setTab} />
+      <Tabs value={tab} onChange={changeTab} />
 
       {board.loading ? (
         <p className="muted">Loading…</p>
@@ -127,7 +150,11 @@ export default function Board() {
         <div className="alert">{board.error}</div>
       ) : listed.length === 0 ? (
         <p className="muted board-empty">
-          {showTop ? "Nothing else on the board right now." : emptyMessage(tab)}
+          {page > 0
+            ? "That's the end of the board."
+            : showTop
+              ? "Nothing else on the board right now."
+              : emptyMessage(tab)}
         </p>
       ) : (
         // One per row rather than a grid: a post is something you read, and a
@@ -138,6 +165,26 @@ export default function Board() {
             <NoticeCard key={notice.id} notice={notice} />
           ))}
         </div>
+      )}
+
+      {(hasNext || page > 0) && (
+        <nav className="board-pager" aria-label="More posts">
+          <button
+            className="btn btn-secondary"
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={page === 0}
+          >
+            ← Newer
+          </button>
+          <span className="muted">Page {page + 1}</span>
+          <button
+            className="btn btn-secondary"
+            onClick={() => setPage((p) => p + 1)}
+            disabled={!hasNext}
+          >
+            Older →
+          </button>
+        </nav>
       )}
 
       {tab !== "mine" && (
@@ -259,6 +306,9 @@ function ComposeNotice({ meta, onPosted, onCancel }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [placeHint, setPlaceHint] = useState("");
+  // Coordinates of the address the author picked from the suggestions, kept
+  // apart from `location` so ticking the pin box later can still use them.
+  const [addressPoint, setAddressPoint] = useState(null);
   const [expiryDays, setExpiryDays] = useState(meta.default_expiry_days);
   const [allowInquiries, setAllowInquiries] = useState(true);
   const [pinned, setPinned] = useState(false);
@@ -359,15 +409,32 @@ function ComposeNotice({ meta, onPosted, onCancel }) {
         <label className="field-label" htmlFor="notice-place">
           Whereabouts <span className="muted">(optional)</span>
         </label>
-        <input
-          id="notice-place"
-          className="input"
+        {/* Suggests addresses but doesn't insist on one: "the bench by the
+            playground" is often more use to a neighbour, and free text still
+            works. Picking a suggestion is what gives us coordinates. */}
+        <AddressAutocomplete
           value={placeHint}
-          onChange={(e) => setPlaceHint(e.target.value)}
-          maxLength={200}
-          placeholder="44th St between 5th and 6th"
+          onChange={(text) => {
+            setPlaceHint(text);
+            // Typing over a chosen address invalidates its coordinates.
+            setAddressPoint(null);
+          }}
+          onSelect={({ address, lat, lng }) => {
+            setPlaceHint(address);
+            const point = { lat, lng };
+            setAddressPoint(point);
+            // Placing the pin at the address is the whole point of picking one,
+            // so it lands immediately — and it's still draggable by clicking
+            // the map, since an address is often only approximately the spot.
+            setLocation(point);
+            setPinned(true);
+          }}
+          center={here ? { lat: here[0], lng: here[1] } : undefined}
         />
-        <p className="field-hint">A landmark usually reads better than an address.</p>
+        <p className="field-hint">
+          Pick a suggestion to place the map pin automatically, or just describe
+          it — a landmark often reads better than an address.
+        </p>
       </div>
 
       <div className="field">
@@ -375,7 +442,13 @@ function ComposeNotice({ meta, onPosted, onCancel }) {
           <input
             type="checkbox"
             checked={pinned}
-            onChange={(e) => setPinned(e.target.checked)}
+            onChange={(e) => {
+              const on = e.target.checked;
+              setPinned(on);
+              // Ticking the box after choosing an address reuses that address
+              // rather than making the author hunt for the spot again.
+              if (on && !location && addressPoint) setLocation(addressPoint);
+            }}
           />
           Also drop a pin on the map
           {suggestsPin(category) && <span className="muted"> — useful for this kind</span>}
@@ -396,8 +469,11 @@ function ComposeNotice({ meta, onPosted, onCancel }) {
               <div className="picker-map centered muted">Locating…</div>
             )}
             <p className="field-hint">
-              Click the map to place it. Informational only — it appears as a
-              muted pin so nobody mistakes it for something to attend.
+              {addressPoint && location
+                ? "Placed at the address you picked — click the map to nudge it."
+                : "Click the map to place it."}{" "}
+              Informational only — it appears as a muted pin so nobody mistakes
+              it for something to attend.
             </p>
           </>
         )}

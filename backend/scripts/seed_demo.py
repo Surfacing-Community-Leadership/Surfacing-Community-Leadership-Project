@@ -212,10 +212,10 @@ NOTICES = [
      "Turned up on our fire escape on Tuesday and won't leave. No collar, "
      "clearly someone's. We're feeding her in the meantime.",
      "Near the 45th St corner store", 11, True),
-    ("dylan", "recommendation", "Anyone know a reliable bike shop?",
+    ("dylan", "question", "Anyone know a reliable bike shop?",
      "Need a wheel trued and I'd rather give the money to someone local. "
      "Walking distance if possible.", None, 6, False),
-    ("greta", "offer_help", "Happy to walk your dog if you're stuck",
+    ("greta", "blog", "Happy to walk your dog if you're stuck",
      "I'm out with mine twice a day anyway. If you're ill or working a double "
      "shift, I can take yours along. No charge, I just like dogs.",
      "Anywhere around the park", 21, False),
@@ -223,7 +223,7 @@ NOTICES = [
      "Sturdy, already used twice, still good for one more move. Also a roll of "
      "bubble wrap. Come and get them before Sunday or they go to recycling.",
      "6th Ave, near 41st", 4, False),
-    ("wei", "recommendation", "Where do people buy plants around here?",
+    ("wei", "question", "Where do people buy plants around here?",
      "Looking for something that survives a north-facing window and my level "
      "of attention. Open to being talked out of it.", None, 8, False),
     ("marcus", "lost_found", "Lost: dark green umbrella, park benches",
