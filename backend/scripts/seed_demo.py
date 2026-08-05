@@ -28,7 +28,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 from fastapi_users.password import PasswordHelper
-from sqlalchemy import select, text
+from sqlalchemy import delete, select, text
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal, engine
@@ -38,6 +38,7 @@ from app.models import (
     Connection,
     Event,
     EventParticipant,
+    HelpThanks,
     Interest,
     Notice,
     NoticeReply,
@@ -45,6 +46,7 @@ from app.models import (
     Notification,
     OrgFollow,
     Profile,
+    SeedState,
     User,
     user_interests,
 )
@@ -55,6 +57,20 @@ CENTER = (40.6552, -74.0069)  # Sunset Park, Brooklyn (lat, lng)
 SCATTER_KM = 1.6              # events land within this radius of CENTER
 DEMO_PASSWORD = "password-123"
 random.seed(42)               # reproducible scatter/choices across runs
+
+# BUMP THIS whenever the seeded content changes — new people, new events, a new
+# kind of demo data. scripts/seed_prod.py compares it against what the database
+# holds and re-seeds on deploy when they differ, which is the only reason demo
+# data added after the first deploy ever shows up.
+#
+#   1  people, events, help requests, connections
+#   2  organizations, volunteer work, follows
+#   3  trust records and help thanks
+#   4  community board: notices, stars, private replies
+#   5  past events with confirmed attendance and written thanks,
+#      so trust records are not all zeros
+SEED_VERSION = 5
+SEED_LABEL = "community board, orgs, volunteer work, trust history"
 
 password_helper = PasswordHelper()
 NOW = datetime.now(timezone.utc)
@@ -193,6 +209,70 @@ ORG_GATHERINGS = [
     ("trinity", "Community potluck supper",
      "Bring a dish if you can, come anyway if you can't.",
      ["cooking-food", "kids-family"], 60),
+]
+
+
+# --- history, so trust records aren't all zeros -----------------------------
+# Every other seeded event is in the future, which meant nobody had hosted,
+# attended or helped with anything and every profile showed "Neighbor" with
+# three zeros — the trust feature looked broken in the demo rather than new.
+# These already happened. (kind, host_prefix, title, description, days_ago,
+# attendee_prefixes, thanks) where `thanks` is (helper_prefix, note) pairs the
+# host writes afterwards; a note must clear MIN_REFLECTION_WORDS to count.
+PAST_EVENTS = [
+    ("gathering", "marcus", "Sunday morning group run",
+     "Easy 5k along the water, nobody left behind.", 21,
+     ["dylan", "mitch", "sam", "nina"], []),
+    ("gathering", "wei", "Dumpling night",
+     "Folded, steamed and eaten about four hundred dumplings.", 17,
+     ["priya", "aisha", "eleanor", "tomas", "greta"], []),
+    ("gathering", "marcus", "Pickup basketball at the courts",
+     "Three-on-three until it got too dark to see the hoop.", 12,
+     ["dylan", "mitch", "sam"], []),
+    ("gathering", "nina", "Porch music night",
+     "Two guitars, a fiddle and a lot of neighbours on the steps.", 9,
+     ["priya", "wei", "greta", "bob", "aisha"], []),
+    ("gathering", "bob", "Neighbourhood clean-up morning",
+     "Six bags of litter off 4th Ave before lunch.", 6,
+     ["mitch", "sam", "tomas", "dylan"], []),
+    ("help_request", "eleanor", "Help moving a bookshelf",
+     "Solid oak, up two flights. I could not have done this alone.", 19,
+     ["tomas", "marcus"],
+     [("tomas", "Tomás arrived early with proper straps and worked out how to get "
+               "it round the landing without taking my door off. He would not "
+               "accept anything for it and stayed for a cup of tea afterwards."),
+      ("marcus", "Marcus took the heavy end the whole way up and made it look "
+                 "easy. He checked the shelf was level before he left and "
+                 "offered to come back if it shifted at all.")]),
+    ("help_request", "eleanor", "Someone to teach me my new phone",
+     "I wanted to video call my grandchildren and had no idea where to start.", 14,
+     ["mitch"],
+     [("mitch", "Mitch sat with me for a full hour and never once made me feel "
+                "slow about it. He wrote the steps on a card in big letters so I "
+                "could do it again on my own, and I have called my "
+                "granddaughter twice since.")]),
+    ("help_request", "greta", "Cat-sitting backup for a weekend",
+     "Away Friday to Sunday and needed someone to look in twice a day.", 11,
+     ["aisha"],
+     [("aisha", "Aisha came both days without being reminded and sent me a photo "
+                "each time so I knew everything was fine. She even swept up the "
+                "litter my cat had kicked across the floor before I got home.")]),
+    ("help_request", "dylan", "Jump-start / car won't turn over",
+     "Dead battery in the rain on a Tuesday morning.", 8,
+     ["tomas"],
+     [("tomas", "Tomás turned up within twenty minutes of me posting and had the "
+                "car running in five. He then followed me to the garage to make "
+                "sure I actually got there, which was well beyond what I asked.")]),
+    ("help_request", "sam", "Proofread a scholarship essay",
+     "Deadline was Friday and I had read it so many times I could not see it.", 5,
+     ["aisha", "priya"],
+     [("aisha", "Aisha went through it line by line and explained why each change "
+                "helped rather than just fixing it. The essay is far clearer than "
+                "what I sent her and I understood the edits well enough to use "
+                "them again."),
+      ("priya", "Priya read it twice and caught that my opening paragraph buried "
+                "the point entirely. Her suggestion for the first line is the one "
+                "I ended up submitting.")]),
 ]
 
 
@@ -609,6 +689,62 @@ async def main() -> None:
                     EventParticipant(event_id=event.id, user_id=u.id, status="maybe")
                 )
 
+        posters_for_history = users
+
+        # 5b. History. Same shapes as above but already over, with confirmed
+        # attendance and written thanks, so trust records show real numbers
+        # instead of three zeros on every profile.
+        for (kind, host_prefix, title, desc, days_ago, attendees, thanks) in PAST_EVENTS:
+            host = posters_for_history[host_prefix]
+            starts = NOW - timedelta(days=days_ago, hours=random.randint(0, 6))
+            lat, lng = scatter(CENTER)
+            event = Event(
+                kind=kind,
+                host_id=host.id,
+                community_id=community.id,
+                tag_id=None,
+                title=title,
+                description=desc,
+                location=wkt_point(lat, lng),
+                address=f"{random.randint(100, 899)} {random.randint(38, 52)}th St, Brooklyn",
+                starts_at=starts,
+                ends_at=starts + timedelta(hours=2),
+                visibility="public",
+                status="completed",
+            )
+            session.add(event)
+            await session.flush()
+
+            for prefix in attendees:
+                session.add(
+                    EventParticipant(
+                        event_id=event.id,
+                        user_id=users[prefix].id,
+                        # "attended" is what the trust record counts, and it is
+                        # self-confirmed after the fact — see app/core/trust.py.
+                        status="attended",
+                    )
+                )
+            for helper_prefix, note in thanks:
+                session.add(
+                    HelpThanks(
+                        event_id=event.id,
+                        helper_id=users[helper_prefix].id,
+                        # Written BY the host, ABOUT the helper — the direction is
+                        # the whole reason the count means anything.
+                        recipient_id=host.id,
+                        note=note,
+                    )
+                )
+                session.add(
+                    Notification(
+                        user_id=users[helper_prefix].id,
+                        type="help_thanks",
+                        actor_id=host.id,
+                        event_id=event.id,
+                    )
+                )
+
         # 6. A few accepted connections so the social graph isn't empty.
         pairs = [
             ("dylan", "marcus"), ("dylan", "wei"), ("eleanor", "greta"),
@@ -728,13 +864,22 @@ async def main() -> None:
                 )
             )
 
+        # 6e. Stamp what was just seeded. Last, so a run that fails partway
+        # leaves no version recorded and the next deploy tries again rather
+        # than believing a half-built demo is current.
+        await session.execute(delete(SeedState))
+        session.add(SeedState(version=SEED_VERSION, label=SEED_LABEL))
+
         await session.commit()
 
     # 7. Report.
     print("Seeded the Sunset Park demo neighborhood:")
+    print(f"  seed version {SEED_VERSION} ({SEED_LABEL})")
     print(f"  {len(PEOPLE)} people, {len(ORGANIZATIONS)} organizations")
     print(f"  {len(GATHERINGS)} gatherings + {len(HELP_REQUESTS)} help requests "
           f"+ {len(VOLUNTEER_WORK)} volunteer shifts + {len(ORG_GATHERINGS)} org gatherings")
+    print(f"  {len(PAST_EVENTS)} past events with attendance + "
+          f"{sum(len(t) for *_, t in PAST_EVENTS)} written thanks")
     print(f"  {len(NOTICES)} notices on the board "
           f"+ {len(NOTICE_REPLIES)} private replies "
           f"+ {sum(len(s) for _, s in NOTICE_STARS)} stars")

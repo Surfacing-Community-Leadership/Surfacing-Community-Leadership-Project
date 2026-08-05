@@ -432,6 +432,36 @@ the affected code had ever been deployed with a real secret in place.**
   feature. What the flyer changed is that it made this fallback load-bearing for
   fonts, which is why it got probed at all.
 
+## Revisions — 2026-08-05, round two (the demo seed was silently stale in production)
+
+- **The bug.** `scripts/seed_prod.py` decided whether to seed by asking only "does
+  the Sunset Park community exist". Once a database had been seeded a single time
+  it never seeded again — so every feature that shipped with demo data had none of
+  it in production, and the deploy log said "already present — skipping" the whole
+  time. Verified against the real code path, not inferred.
+- **The fix: a version marker.** `seed_state` (one row) records which
+  `SEED_VERSION` built the current demo data. `seed_prod` re-seeds when the demo
+  is absent, unversioned, or older than the build; skips when it matches; and
+  **refuses to overwrite a newer database with older data**, so rolling back to an
+  earlier image doesn't destroy demo content.
+- **The migration deliberately does not backfill a version.** An existing
+  deployment therefore reads as "unversioned", which is exactly right — it is
+  missing everything added to the seed since it was first built.
+- **The version is stamped last**, after every insert, so a run that dies partway
+  leaves no version recorded and the next deploy retries rather than believing a
+  half-built demo is current.
+- **Re-seeding is destructive and says so.** It TRUNCATEs users/events/communities,
+  so it deletes any account created on the deployed app. That is correct for a
+  demo and wrong for a real deployment, which is what `SEED_DEMO=false` is for —
+  the log now prints how many accounts it is about to delete.
+- **Also fixed: trust records were all zeros in the demo.** Every seeded event was
+  in the future, and nothing seeded `attended` participations or `help_thanks` —
+  so the trust feature, which counts hosted/attended/helped, showed three zeros
+  and "Neighbor" on every profile. It looked broken rather than new. `PAST_EVENTS`
+  adds ten events that already happened, 28 confirmed attendances and 7 written
+  thanks (each clearing `MIN_REFLECTION_WORDS`), giving profiles like
+  "hosted=2 attended=1 helped=1".
+
 ## Deferred (known gaps to discuss)
 
 - Rate limiting is in the stack but still not wired.
