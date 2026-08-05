@@ -17,6 +17,7 @@ from app.models.org_follow import OrgFollow
 from app.models.participant import EventParticipant
 from app.models.profile import Profile
 from app.models.report import Report
+from app.models.seed_state import SeedState
 from app.models.user import User
 
 __all__ = [
@@ -39,6 +40,7 @@ __all__ = [
     "OrgFollow",
     "Profile",
     "Report",
+    "SeedState",
     "User",
     "user_interests",
 ]
