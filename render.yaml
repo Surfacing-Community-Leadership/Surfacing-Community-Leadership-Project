@@ -47,6 +47,11 @@ services:
         sync: false
       - key: GOOGLE_CLIENT_SECRET
         sync: false
+      # AI flyer copy. Free key from aistudio.google.com/apikey. Optional: with
+      # it unset the flyer still works, using templated copy built from the
+      # event's own fields, so leaving this blank degrades nothing.
+      - key: GEMINI_API_KEY
+        sync: false
       # Confirmation links must point at the deployed origin.
       - key: PUBLIC_BASE_URL
         fromService:
