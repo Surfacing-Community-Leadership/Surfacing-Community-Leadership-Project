@@ -39,6 +39,9 @@ from app.models import (
     Event,
     EventParticipant,
     Interest,
+    Notice,
+    NoticeReply,
+    NoticeStar,
     Notification,
     OrgFollow,
     Profile,
@@ -193,6 +196,127 @@ ORG_GATHERINGS = [
 ]
 
 
+# --- notice board ----------------------------------------------------------
+# Postings on the Sunset Park board, deliberately mundane: the board's job is
+# small useful facts, not drama. Each author stays within their allowance
+# (max_live_for), so the seeded state is one a real user could have reached.
+# `pin` drops an informational marker on the map — only for the area-bound ones,
+# because that's the whole point of the pin.
+# (author_prefix, category, title, body, place_hint, days_left, pin)
+NOTICES = [
+    ("marcus", "giveaway", "Free bookshelf, solid pine",
+     "Two shelves, about waist height. One scuff on the side, otherwise fine. "
+     "It's on my stoop — first person to message me can take it.",
+     "44th St between 5th and 6th", 9, False),
+    ("priya", "lost_found", "Found: small grey cat, very friendly",
+     "Turned up on our fire escape on Tuesday and won't leave. No collar, "
+     "clearly someone's. We're feeding her in the meantime.",
+     "Near the 45th St corner store", 11, True),
+    ("dylan", "question", "Anyone know a reliable bike shop?",
+     "Need a wheel trued and I'd rather give the money to someone local. "
+     "Walking distance if possible.", None, 6, False),
+    ("greta", "blog", "Happy to walk your dog if you're stuck",
+     "I'm out with mine twice a day anyway. If you're ill or working a double "
+     "shift, I can take yours along. No charge, I just like dogs.",
+     "Anywhere around the park", 21, False),
+    ("aisha", "giveaway", "Moving boxes, about fifteen of them",
+     "Sturdy, already used twice, still good for one more move. Also a roll of "
+     "bubble wrap. Come and get them before Sunday or they go to recycling.",
+     "6th Ave, near 41st", 4, False),
+    ("wei", "question", "Where do people buy plants around here?",
+     "Looking for something that survives a north-facing window and my level "
+     "of attention. Open to being talked out of it.", None, 8, False),
+    ("marcus", "lost_found", "Lost: dark green umbrella, park benches",
+     "Left it by the benches on the north lawn on Saturday afternoon. Cheap "
+     "umbrella, sentimental value, long story.", "North lawn", 5, True),
+    # The read-and-know types: news, credit where it's due, and a longer piece.
+    ("eleanor", "shoutout", "Thank you to whoever shovelled 43rd Street",
+     "Whole block was clear by seven in the morning after Tuesday's snow and "
+     "nobody has owned up to it. Whoever you are: the woman at number 512 uses "
+     "a walker and she got to her appointment. That was you.",
+     "43rd St", 18, False),
+    ("nina", "news", "The bodega on 5th is reopening under new owners",
+     "Shut since March after the fire. The family who ran it have retired, and "
+     "the new owners are keeping the name and, they tell me, the cat. Expect "
+     "the shutters up sometime in the next fortnight.",
+     "5th Ave at 44th", 12, False),
+    ("tomas", "blog", "What I learned running the block association for a year",
+     "A year ago nobody wanted the job, which is how I got it. Some things I "
+     "did not expect:\n\n"
+     "Turnout has almost nothing to do with the agenda and almost everything "
+     "to do with whether there is food. Six people came to the meeting about "
+     "the parking petition. Thirty-one came to the one with the pizza, and we "
+     "got through the same agenda in half the time.\n\n"
+     "The people who complain loudest are rarely the people with the biggest "
+     "problem. The woman whose ceiling had been leaking for eight months never "
+     "raised it once — I found out because I knocked on every door in the "
+     "building for something unrelated.\n\n"
+     "Knocking on doors is the only thing that reliably works. Not flyers, not "
+     "the group chat, not the noticeboard downstairs. Doors.\n\n"
+     "If you're thinking about taking it on: it's about two hours a week, most "
+     "of it walking around, and you will know your neighbours by name inside a "
+     "month. That part turned out to be the whole point.",
+     None, 30, False),
+    ("sam", "shoutout", "Bob talked me through fixing my own radiator",
+     "Forty minutes on his stoop with a diagram on the back of an envelope, "
+     "and he wouldn't take anything for it. It works. I have heat.",
+     None, 14, False),
+    # Organizations use the two types reserved for them.
+    ("library", "announcement", "Summer reading starts Monday",
+     "Sign-ups are open at the front desk all week, ages 4 and up. There are "
+     "prizes, and they are better than you'd expect.",
+     "Branch on 4th Ave", 14, False),
+    ("library", "service_change", "Closed Thursday for a systems upgrade",
+     "The whole branch is shut Thursday while the catalogue is migrated. "
+     "Returns can go in the outside bin as usual; nothing will be marked late.",
+     "Branch on 4th Ave", 7, True),
+    ("parks", "service_change", "North lawn closed for reseeding, two weeks",
+     "The grass took a beating this summer. Fencing goes up Monday. The pool "
+     "and the south end are open as normal.",
+     "North lawn, by the 41st St entrance", 16, True),
+    ("parks", "news", "The harbour view is back: scaffolding comes down Friday",
+     "Two years of it. The overlook reopens the same day, railings and all, and "
+     "the benches have been replaced rather than repaired.",
+     "The overlook", 21, True),
+    ("mutualaid", "announcement", "Coat drive: drop-offs start this week",
+     "Clean coats in any size, especially kids' sizes. Bins are inside the "
+     "door during pantry hours. We sort on Saturdays if you'd rather help than "
+     "donate.", "Pantry entrance on 4th Ave", 20, True),
+    ("trinity", "announcement", "The hall is free on Wednesday evenings",
+     "Any neighbourhood group is welcome to use it — tenants' associations, "
+     "book clubs, anything. There's a kettle and about sixty chairs. Just ask.",
+     "Trinity hall, 5th Ave", 25, False),
+]
+
+# Stars, as an anonymous aggregate. The shoutout leads on purpose: it's the kind
+# of post the board exists for, and it makes "post of the day" show something
+# worth reading rather than the loudest thing. Names here only decide the count —
+# nothing in the app ever reveals who starred what.
+# (notice_title_startswith, [starrer_prefixes])
+NOTICE_STARS = [
+    ("Thank you to whoever shovelled",
+     ["dylan", "bob", "mitch", "priya", "marcus", "wei", "aisha", "nina", "sam"]),
+    ("What I learned running", ["eleanor", "priya", "greta", "bob", "dylan"]),
+    ("The bodega on 5th", ["marcus", "aisha", "tomas", "sam"]),
+    ("Bob talked me through", ["eleanor", "nina", "greta"]),
+    ("The harbour view is back", ["dylan", "wei"]),
+    ("Found: small grey cat", ["greta", "eleanor"]),
+    ("Free bookshelf", ["wei"]),
+]
+
+# Replies already sitting in a couple of authors' inboxes, so the private-reply
+# flow is visible in the demo rather than only described.
+# (notice_title_startswith, replier_prefix, body)
+NOTICE_REPLIES = [
+    ("Free bookshelf", "aisha",
+     "I'd love it if it's still going — I can carry it round this evening."),
+    ("Free bookshelf", "wei", "Is it still available? I'm two blocks away."),
+    ("Found: small grey cat", "greta",
+     "That sounds like the cat from 46th — I'll ask around the block tonight."),
+    ("Moving boxes", "dylan", "I'll take the lot, moving next month. Thank you!"),
+]
+
+
 # --- demo events -----------------------------------------------------------
 # (kind, title, description, interest_slugs, capacity)
 GATHERINGS = [
@@ -300,6 +424,9 @@ async def main() -> None:
         # been imported, and truncating events without it would leave tiles
         # marked 'done' for work that no longer exists — the map would show no
         # imported events until FRESH_FOR (24h) elapsed.
+        #
+        # notices and notice_replies aren't named because they cascade from
+        # users and communities, both of which are.
         await conn.execute(
             text("TRUNCATE users, events, communities, import_areas CASCADE")
         )
@@ -335,6 +462,11 @@ async def main() -> None:
                 hashed_password=hashed,
                 # People never carry the organization badge; the ORGANIZATIONS
                 # below do.
+                #
+                # Confirmed, though: posting to the notice board requires a
+                # reachable address, and a demo account nobody can post from
+                # would make the board look broken rather than quiet.
+                email_confirmed_at=NOW,
             )
             session.add(user)
             await session.flush()
@@ -531,6 +663,71 @@ async def main() -> None:
                     )
                 )
 
+        # 6d. The notice board. Authors are looked up across both people and
+        # organizations, since both post here.
+        posters = {**users, **orgs}
+        notices = {}
+        for prefix, category, title, body, place, days_left, pin in NOTICES:
+            lat, lng = scatter(CENTER)
+            notice = Notice(
+                author_id=posters[prefix].id,
+                community_id=community.id,
+                category=category,
+                title=title,
+                body=body,
+                place_hint=place,
+                # Only the area-bound ones get a map pin; a giveaway on a stoop
+                # doesn't need one, and every notice on the map would drown the
+                # events out.
+                location=wkt_point(lat, lng) if pin else None,
+                expires_at=NOW + timedelta(days=days_left),
+            )
+            session.add(notice)
+            notices[title] = notice
+        await session.flush()
+
+        # Stars. Backdated well inside the 24-hour window so "post of the day"
+        # has something to show the moment the demo is opened.
+        for title_prefix, starrers in NOTICE_STARS:
+            notice = next(
+                (n for t, n in notices.items() if t.startswith(title_prefix)), None
+            )
+            if notice is None:
+                continue
+            for starrer_prefix in starrers:
+                starrer = users.get(starrer_prefix)
+                # Never let an author star their own post: the count would stop
+                # meaning "other people found this useful".
+                if starrer is None or starrer.id == notice.author_id:
+                    continue
+                session.add(
+                    NoticeStar(
+                        notice_id=notice.id,
+                        user_id=starrer.id,
+                        created_at=NOW - timedelta(hours=random.randint(1, 20)),
+                    )
+                )
+
+        # Private replies, plus the one notification each would have produced.
+        for title_prefix, replier_prefix, body in NOTICE_REPLIES:
+            notice = next(
+                (n for t, n in notices.items() if t.startswith(title_prefix)), None
+            )
+            if notice is None:
+                continue
+            replier = users[replier_prefix]
+            session.add(
+                NoticeReply(notice_id=notice.id, author_id=replier.id, body=body)
+            )
+            session.add(
+                Notification(
+                    user_id=notice.author_id,
+                    type="notice_reply",
+                    actor_id=replier.id,
+                    notice_id=notice.id,
+                )
+            )
+
         await session.commit()
 
     # 7. Report.
@@ -538,6 +735,9 @@ async def main() -> None:
     print(f"  {len(PEOPLE)} people, {len(ORGANIZATIONS)} organizations")
     print(f"  {len(GATHERINGS)} gatherings + {len(HELP_REQUESTS)} help requests "
           f"+ {len(VOLUNTEER_WORK)} volunteer shifts + {len(ORG_GATHERINGS)} org gatherings")
+    print(f"  {len(NOTICES)} notices on the board "
+          f"+ {len(NOTICE_REPLIES)} private replies "
+          f"+ {sum(len(s) for _, s in NOTICE_STARS)} stars")
     print(f"  center: {CENTER} (deny the browser location prompt to land here)")
     print(f"\n  All accounts use password: {DEMO_PASSWORD}")
     print("\n  People:")

@@ -968,6 +968,376 @@
   --color-accent-800: #643312;
 }
 
+/* ---- Notice board -------------------------------------------------------
+   Deliberately flatter and quieter than the event cards: a board is something
+   you skim, not a feed that competes for attention. No counts, no ranking, no
+   emphasis on recency — just the category, the words, and how long it has left. */
+.org .board-intro {
+  max-width: 60ch;
+  margin: -8px 0 24px;
+}
+.org .board-blocked {
+  background: var(--color-accent-100);
+  color: var(--color-accent-800);
+  border-radius: 18px;
+  padding: 14px 18px;
+  font-size: 14px;
+  margin-bottom: 22px;
+}
+/* Three tabs, so they fit a phone without scrolling or wrapping. */
+.org .board-tabs {
+  margin-bottom: 22px;
+}
+
+/* ---- Post of the day ----------------------------------------------------
+   The single piece of prominence on the board. Ranked on stars from the last
+   24 hours only, so it rotates instead of accumulating — a spotlight, not a
+   leaderboard. There is no second or third place anywhere in the UI. */
+.org .potd {
+  margin-bottom: 30px;
+}
+.org .potd-kicker {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-accent-700);
+  margin-bottom: 10px;
+}
+.org .potd-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 28px 30px;
+  border-radius: 30px;
+  border-left: 5px solid var(--nc-accent, var(--color-accent));
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.16s ease;
+}
+.org .potd-card:hover {
+  transform: translateY(-2px);
+  color: inherit;
+}
+.org .potd-card h2 {
+  margin: 0;
+}
+.org .potd-card .notice-body {
+  -webkit-line-clamp: 4;
+}
+.org .potd-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px 14px;
+  /* Wraps rather than clipping the caption at a phone's right edge. */
+  flex-wrap: wrap;
+  margin-top: 12px;
+  font-size: 12px;
+}
+
+/* ---- Stars --------------------------------------------------------------
+   A count, never a list of names. Nothing in this component or its API can
+   reveal who starred — that's what separates "this was useful" from a
+   popularity contest. */
+.org .star-btn,
+.star-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border: 1px solid var(--color-divider);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-neutral-700);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+}
+.org .star-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent-700);
+}
+.org .star-btn.on {
+  background: var(--color-accent-100);
+  border-color: var(--color-accent);
+  color: var(--color-accent-800);
+}
+.org .star-lg {
+  padding: 8px 16px;
+  font-size: 15px;
+}
+.org .star-count {
+  font-variant-numeric: tabular-nums;
+}
+.org .board-empty {
+  padding: 28px 0;
+}
+.org .allowance {
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+/* Pages, not infinite scroll. Reaching the end of a page is a natural place to
+   stop reading, which is the point of a board you visit rather than a feed. */
+.org .board-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 26px;
+}
+.org .board-pager .muted {
+  font-size: 13px;
+  min-width: 5.5em;
+  text-align: center;
+}
+
+/* One post per row. A post is something you read, so it gets the full column
+   width instead of being clipped into a tile — the same shape as the highlight
+   above it, minus the tint that marks that one out. */
+.org .board-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.org .notice-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 26px 28px;
+  background: var(--color-surface);
+  /* A rule in the type's colour does the work a coloured background would,
+     without turning the board into a set of traffic lights. */
+  border: 0;
+  border-left: 5px solid var(--nc-accent, var(--color-accent-200));
+  border-radius: 26px;
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.16s ease;
+}
+.org .notice-card:hover {
+  transform: translateY(-2px);
+  color: inherit;
+}
+.org .notice-card h3 {
+  margin: 0;
+  font-size: clamp(20px, 2.1vw, 26px);
+}
+.org .notice-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.org .notice-body {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--color-neutral-800);
+  /* Three lines on the board; the whole thing on the notice's own page. So a
+     wordy notice can't shout down a short one. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.org .notice-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 12px;
+  color: var(--color-neutral-700);
+}
+.org .notice-meta a {
+  color: inherit;
+}
+.org .notice-verified {
+  color: var(--color-accent-2-700);
+  font-weight: 700;
+}
+.org .notice-replies {
+  font-weight: 700;
+  color: var(--color-accent-700);
+}
+
+/* Type accents. A giveaway leans sage (something is on offer); a loss or a
+   question leans terracotta (somebody needs something); the two org-only kinds
+   take the warm ochre that volunteer work already uses. */
+.org .nc-giveaway {
+  --nc-accent: var(--color-accent-2);
+}
+.org .nc-lost_found,
+.org .nc-question {
+  --nc-accent: var(--color-accent);
+}
+.org .nc-announcement,
+.org .nc-service_change {
+  --nc-accent: #a8762b;
+}
+.org .nc-news,
+.org .nc-shoutout,
+.org .nc-blog {
+  --nc-accent: var(--color-neutral-400, #b7ab95);
+}
+.org .tag-giveaway {
+  background: var(--color-accent-2-100);
+  color: var(--color-accent-2-800);
+}
+.org .tag-lost_found,
+.org .tag-question {
+  background: var(--color-accent-100);
+  color: var(--color-accent-800);
+}
+.org .tag-announcement,
+.org .tag-service_change {
+  background: #f5e6c8;
+  color: #6b4a15;
+}
+/* The read-and-know types share a neutral treatment: they're for reading, not
+   for acting on, and shouldn't compete with the giveaways and questions. */
+.org .tag-news,
+.org .tag-shoutout,
+.org .tag-blog {
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-800);
+}
+/* The municipal/institutional marker on a verified organization's post. */
+.org .tag-official {
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+
+/* The compose form, tinted by category the same way the event form is. */
+.org .notice-form {
+  background: color-mix(in srgb, var(--color-accent) 7%, var(--color-surface));
+  border-radius: 30px;
+  padding: 26px 28px;
+  margin-bottom: 26px;
+}
+.org .notice-form h2 {
+  margin-top: 0;
+}
+.org .notice-form.form-giveaway {
+  --color-accent: var(--color-accent-2);
+  --color-accent-600: var(--color-accent-2-600);
+  --color-accent-700: var(--color-accent-2-700);
+  --color-accent-100: var(--color-accent-2-100);
+  --color-accent-200: var(--color-accent-2-200);
+  --color-accent-800: var(--color-accent-2-800);
+}
+.org .notice-form.form-announcement,
+.org .notice-form.form-service_change {
+  --color-accent: #a8762b;
+  --color-accent-600: #8a5f1f;
+  --color-accent-700: #6b4a15;
+  --color-accent-100: #f8eed8;
+  --color-accent-200: #f0dcb4;
+  --color-accent-800: #55390f;
+}
+.org .notice-form .alert {
+  --color-accent: #c67139;
+  --color-accent-100: #fff2eb;
+  --color-accent-800: #643312;
+}
+
+/* One notice's own page. */
+.org .notice-detail {
+  background: var(--color-surface);
+  border-left: 4px solid var(--nc-accent, var(--color-accent-200));
+  border-radius: 26px;
+  padding: 26px 28px;
+  margin: 16px 0 26px;
+}
+.org .notice-detail h1 {
+  margin: 12px 0;
+}
+.org .notice-detail-body {
+  white-space: pre-wrap;
+  line-height: 1.65;
+  margin: 0 0 18px;
+}
+.org .notice-owner-bar {
+  border-top: 1px solid var(--color-divider);
+  padding-top: 20px;
+  margin-bottom: 28px;
+}
+.org .notice-replies-head {
+  margin-bottom: 4px;
+}
+.org .notice-reply {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 18px 20px;
+}
+.org .notice-reply p {
+  margin: 0;
+}
+.org .notice-reply-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.org .notice-reply-form {
+  background: var(--color-surface);
+  border-radius: 26px;
+  padding: 24px 26px;
+}
+.org .notice-reply-form h2 {
+  margin-top: 0;
+}
+.org .notice-reply-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 12px;
+}
+.org .notice-sent {
+  background: var(--color-accent-2-100);
+  color: var(--color-accent-2-800);
+  border-radius: 14px;
+  padding: 10px 14px;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+.org .notice-closed {
+  background: var(--color-surface);
+  border-radius: 26px;
+  padding: 24px 26px;
+}
+.org .notice-report {
+  margin-top: 22px;
+  font-size: 13px;
+}
+.org .notice-card-foot {
+  margin-top: 2px;
+}
+.org .notice-detail-foot {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-divider);
+  font-size: 12px;
+}
+.org .notice-inquiry-toggle {
+  margin-top: 14px;
+  font-size: 13px;
+}
+/* A longer piece gets a tighter preview on the board than a giveaway does, so
+   one wordy post can't dominate the grid. */
+.org .notice-body.clamp-2 {
+  -webkit-line-clamp: 2;
+}
+
 /* ---- Auth split-screen (Login / Register) ------------------------------ */
 .auth-split {
   min-height: 100vh;

@@ -14,7 +14,8 @@ class Report(Base):
     __tablename__ = "reports"
     __table_args__ = (
         CheckConstraint(
-            "reported_user_id IS NOT NULL OR reported_event_id IS NOT NULL",
+            "reported_user_id IS NOT NULL OR reported_event_id IS NOT NULL "
+            "OR reported_notice_id IS NOT NULL",
             name="ck_reports_has_target",
         ),
         CheckConstraint(
@@ -34,6 +35,11 @@ class Report(Base):
     )
     reported_event_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("events.id", ondelete="CASCADE")
+    )
+    # A board notice. Its own column rather than just reporting the author, so
+    # the moderation queue can see which posting was objected to.
+    reported_notice_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("notices.id", ondelete="CASCADE")
     )
     reason: Mapped[str] = mapped_column(Text)
     details: Mapped[str | None] = mapped_column(Text)

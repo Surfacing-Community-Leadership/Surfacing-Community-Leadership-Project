@@ -20,6 +20,7 @@ async def notify(
     type: str,
     actor_id: uuid.UUID | None = None,
     event_id: uuid.UUID | None = None,
+    notice_id: uuid.UUID | None = None,
 ) -> None:
     """Stage a notification for `user_id`. Silently skips it when the actor is
     the recipient (no self-pings) or when the two have blocked each other."""
@@ -38,6 +39,10 @@ async def notify(
             return
     db.add(
         Notification(
-            user_id=user_id, type=type, actor_id=actor_id, event_id=event_id
+            user_id=user_id,
+            type=type,
+            actor_id=actor_id,
+            event_id=event_id,
+            notice_id=notice_id,
         )
     )

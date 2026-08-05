@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 
-from app.models import Event, Report, User
+from app.models import Event, Notice, Report, User
 from app.routers.deps import DB, CurrentUser
 from app.schemas.report import ReportCreate, ReportRead
 
@@ -15,11 +15,15 @@ async def file_report(payload: ReportCreate, db: DB, user: CurrentUser):
     if payload.reported_event_id is not None:
         if await db.get(Event, payload.reported_event_id) is None:
             raise HTTPException(status_code=404, detail="Reported event not found")
+    if payload.reported_notice_id is not None:
+        if await db.get(Notice, payload.reported_notice_id) is None:
+            raise HTTPException(status_code=404, detail="Reported notice not found")
 
     report = Report(
         reporter_id=user.id,
         reported_user_id=payload.reported_user_id,
         reported_event_id=payload.reported_event_id,
+        reported_notice_id=payload.reported_notice_id,
         reason=payload.reason,
         details=payload.details,
     )

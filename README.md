@@ -42,9 +42,35 @@ If we succeed, people need the app less and less over time. That's the point.
   more.
 - **Safety** — decline requests, block users, and report bad behavior.
 
-Planned stretch features include verified organization accounts, a low-noise
-notice board, and an AI layer that guides event creation and surfaces
-relevant local happenings.
+## Beyond the MVP (built)
+
+- **Trust records** — public, verifiable counts of what someone has hosted,
+  attended and helped with, so neighbors can judge for themselves.
+- **Verified organization accounts** — libraries, schools, parks and the like,
+  auto-verified on domains that can't be casually registered.
+- **Volunteer work** — the organization counterpart to a personal help request.
+- **Following organizations** — notifications when one you follow posts.
+- **The community board** — a per-neighborhood board for things worth knowing
+  that aren't invitations: giveaways, lost & found, asks, offers, local news,
+  shoutouts, longer write-ups, plus official announcements and service changes
+  from verified organizations. Three tabs — Posts, Organizations, My posts — and
+  six posts to a page rather than an endless scroll. Deliberately low-noise:
+  everything expires (two weeks by default, three months at most), each person
+  gets five live posts at a time, replies go privately to whoever posted and only
+  if they left inquiries open, and there are **no comment threads anywhere**.
+  Whereabouts suggests addresses as you type, and picking one drops the map pin
+  there automatically. Authors can edit their own posts — words, type,
+  whereabouts, pin and expiry — without losing the stars or replies they've
+  already collected.
+  A star marks a post as useful — counted as an anonymous aggregate, never as a
+  list of names, and one highlighted "post of the day" rotates on a 24-hour
+  window rather than accumulating. There is no crime-and-safety type, which is a
+  design decision rather than an oversight — see `backend/app/core/notices.py`.
+  (In the code the board is still `notices`/`Notice`; only the interface was
+  renamed.)
+
+Still planned: an AI layer that guides event creation and surfaces relevant
+local happenings.
 
 ## Tech stack
 

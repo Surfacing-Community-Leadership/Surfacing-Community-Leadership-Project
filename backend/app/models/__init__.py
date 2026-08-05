@@ -9,6 +9,7 @@ from app.models.help_thanks import HelpThanks
 from app.models.import_area import ImportArea
 from app.models.interest import Interest, user_interests
 from app.models.message import EventMessage
+from app.models.notice import Notice, NoticeReply, NoticeStar
 from app.models.notification import Notification
 from app.models.oauth_account import OAuthAccount
 from app.models.org_follow import OrgFollow
@@ -28,6 +29,9 @@ __all__ = [
     "HelpThanks",
     "ImportArea",
     "Interest",
+    "Notice",
+    "NoticeReply",
+    "NoticeStar",
     "Notification",
     "OAuthAccount",
     "OrgFollow",

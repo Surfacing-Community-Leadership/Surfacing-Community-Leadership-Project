@@ -10,6 +10,11 @@ import { kindLabel } from "../lib/eventKinds.js";
 export default function MapHome() {
   const center = useGeolocation(); // [lat, lng]; null until located
   const [events, setEvents] = useState([]);
+  // Board notices that carry a location. Kept in their own state and their own
+  // request: a notice isn't an event, has no start time to sort by, and must not
+  // land in the "spots nearby" list as something you could attend.
+  const [notices, setNotices] = useState([]);
+  const [showNotices, setShowNotices] = useState(true);
   const [kind, setKind] = useState(""); // "", "gathering", "help_request"
   // "" = all categories, "mine" = matching my interests, or an interest id.
   const [category, setCategory] = useState("");
@@ -36,6 +41,19 @@ export default function MapHome() {
         setError(err.message);
       } finally {
         setLoading(false);
+      }
+
+      // Notice pins ride along but never block the map: a failure here leaves
+      // the events showing rather than erroring the whole screen.
+      try {
+        const pins = new URLSearchParams({
+          lat: lat.toFixed(6),
+          lng: lng.toFixed(6),
+          radius_m: Math.round(radiusM),
+        });
+        setNotices(await api.get(`/api/notices/map?${pins}`));
+      } catch {
+        setNotices([]);
       }
     },
     [kind, category],
@@ -68,6 +86,7 @@ export default function MapHome() {
       <MapView
         center={center}
         events={events}
+        notices={showNotices ? notices : []}
         onReady={(map) => {
           mapRef.current = map;
         }}
@@ -100,6 +119,19 @@ export default function MapHome() {
             ))}
           </select>
         </div>
+        {notices.length > 0 && (
+          <label className="map-notice-toggle">
+            <input
+              type="checkbox"
+              checked={showNotices}
+              onChange={(e) => setShowNotices(e.target.checked)}
+            />
+            Show {notices.length} board {notices.length === 1 ? "post" : "posts"}
+            <Link to="/board" className="link-button">
+              Board
+            </Link>
+          </label>
+        )}
 
         <div className="map-panel-scroll">
           {error && <div className="alert">{error}</div>}

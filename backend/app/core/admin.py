@@ -12,7 +12,7 @@ from starlette.requests import Request
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal, engine
-from app.models import Community, Event, Interest, Profile, Report, User
+from app.models import Community, Event, Interest, Notice, Profile, Report, User
 
 password_helper = PasswordHelper()
 
@@ -95,10 +95,26 @@ class EventAdmin(ModelView, model=Event):
     can_create = False  # events belong to hosts; admins moderate, not author
 
 
+class NoticeAdmin(ModelView, model=Notice):
+    name_plural = "Posts (community board)"
+    icon = "fa-solid fa-thumbtack"
+    column_list = [
+        Notice.title,
+        Notice.category,
+        Notice.expires_at,
+        Notice.resolved_at,
+        Notice.author_id,
+        Notice.community_id,
+    ]
+    column_searchable_list = [Notice.title]
+    form_excluded_columns = [Notice.created_at, Notice.updated_at]
+    can_create = False  # notices belong to neighbors; admins moderate, not post
+
+
 class ReportAdmin(ModelView, model=Report):
     name_plural = "Reports (moderation queue)"
     icon = "fa-solid fa-flag"
-    column_list = [Report.status, Report.reason, Report.reported_user_id, Report.reported_event_id, Report.created_at]
+    column_list = [Report.status, Report.reason, Report.reported_user_id, Report.reported_event_id, Report.reported_notice_id, Report.created_at]
     form_columns = [Report.status, Report.resolved_at, Report.resolved_by]
     can_create = False
     can_delete = False  # the queue is an audit trail; resolve, don't erase
@@ -110,6 +126,6 @@ def mount_admin(app) -> Admin:
         engine,
         authentication_backend=AdminAuth(secret_key=settings.secret_key),
     )
-    for view in (UserAdmin, ProfileAdmin, CommunityAdmin, InterestAdmin, EventAdmin, ReportAdmin):
+    for view in (UserAdmin, ProfileAdmin, CommunityAdmin, InterestAdmin, EventAdmin, NoticeAdmin, ReportAdmin):
         admin.add_view(view)
     return admin

@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 from sqlalchemy import func, select, update
 
-from app.models import Event, HelpThanks, Notification, Profile
+from app.models import Event, HelpThanks, Notice, Notification, Profile
 from app.routers.deps import DB, CurrentUser
 from app.schemas.notification import NotificationRead, UnreadCount
 
@@ -16,12 +16,14 @@ def _render(
     event_title: str | None,
     thanks_note: str | None = None,
     event_kind: str | None = None,
+    notice_title: str | None = None,
 ):
     """Compose the human sentence and click-target for a notification from its
     structured fields, so stored rows never hold stale text."""
     actor = actor_name or "Someone"
     title = event_title or "an event"
     event_link = f"/events/{n.event_id}" if n.event_id else None
+    notice_link = f"/board/{n.notice_id}" if n.notice_id else "/board"
     # A thank-you carries the neighbor's own words when they left any — read
     # live from help_thanks so an edited note is never stale here. An
     # organization confirming a volunteer shift reads differently from a
@@ -57,6 +59,13 @@ def _render(
             + f": {title}",
             event_link,
         ),
+        # The board's one and only notification: somebody answered something
+        # *you* put up. Nothing on the board pings you for a stranger's post.
+        "notice_reply": (
+            f"{actor} replied to your notice"
+            + (f": {notice_title}" if notice_title else ""),
+            notice_link,
+        ),
     }.get(n.type, ("You have a new notification", None))
 
 
@@ -75,9 +84,11 @@ async def list_notifications(
                 Event.title,
                 HelpThanks.note,
                 Event.kind,
+                Notice.title,
             )
             .outerjoin(Profile, Profile.user_id == Notification.actor_id)
             .outerjoin(Event, Event.id == Notification.event_id)
+            .outerjoin(Notice, Notice.id == Notification.notice_id)
             # For a help_thanks the recipient of the notification *is* the
             # helper, so this pairs the row with the note left for them.
             .outerjoin(
@@ -93,8 +104,10 @@ async def list_notifications(
     ).all()
 
     out = []
-    for n, actor_name, event_title, thanks_note, event_kind in rows:
-        message, link = _render(n, actor_name, event_title, thanks_note, event_kind)
+    for n, actor_name, event_title, thanks_note, event_kind, notice_title in rows:
+        message, link = _render(
+            n, actor_name, event_title, thanks_note, event_kind, notice_title
+        )
         out.append(
             NotificationRead(
                 id=n.id,
@@ -103,6 +116,7 @@ async def list_notifications(
                 link=link,
                 actor_id=n.actor_id,
                 event_id=n.event_id,
+                notice_id=n.notice_id,
                 is_read=n.is_read,
                 created_at=n.created_at,
             )

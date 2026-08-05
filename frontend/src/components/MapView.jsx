@@ -12,6 +12,7 @@ import { useNavigate } from "react-router-dom";
 import L from "leaflet";
 import { tagIcon } from "../lib/tagIcons.js";
 import { kindLabel } from "../lib/eventKinds.js";
+import { categoryShort } from "../lib/noticeCategories.js";
 
 // Markers: a circle whose border color is the event kind (green gathering /
 // orange help) with the tag's emoji in the middle — so one pin conveys both.
@@ -26,6 +27,23 @@ import { kindLabel } from "../lib/eventKinds.js";
 // Icons are cached by "kind|tagSlug" so panning/re-rendering reuses them
 // instead of allocating a fresh divIcon per marker every render.
 const iconCache = new Map();
+
+// Notice pins are deliberately a different shape as well as a different colour:
+// a small rounded square with an ⓘ, so nobody mistakes an informational notice
+// for something they can turn up to. Shape survives colour-blindness; colour
+// alone would not.
+let noticeIcon;
+function pinIconForNotice() {
+  if (!noticeIcon) {
+    noticeIcon = L.divIcon({
+      className: "pin-wrap",
+      html: '<span class="pin pin-notice"><span class="pin-emoji">ⓘ</span></span>',
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
+    });
+  }
+  return noticeIcon;
+}
 
 function pinIcon(kind, tagSlug) {
   const key = `${kind}|${tagSlug || ""}`;
@@ -68,7 +86,7 @@ function MapBridge({ onReady, onMoveEnd }) {
   return null;
 }
 
-export default function MapView({ center, events, onReady, onMoveEnd }) {
+export default function MapView({ center, events, notices = [], onReady, onMoveEnd }) {
   const navigate = useNavigate();
 
   return (
@@ -106,6 +124,24 @@ export default function MapView({ center, events, onReady, onMoveEnd }) {
               {ev.distance_m != null && ` · ${formatDistance(ev.distance_m)}`}
             </div>
             {ev.status !== "open" && <div className="muted">{ev.status}</div>}
+          </Tooltip>
+        </Marker>
+      ))}
+      {/* Informational notice pins. Rendered after the event markers so a
+          notice never sits on top of something you could actually attend. */}
+      {notices.map((n) => (
+        <Marker
+          key={n.id}
+          position={[n.location.lat, n.location.lng]}
+          icon={pinIconForNotice()}
+          eventHandlers={{ click: () => navigate(`/board/${n.id}`) }}
+        >
+          <Tooltip direction="top" offset={[0, -12]} opacity={1} className="pin-tip">
+            <strong>{n.title}</strong>
+            <div className="muted">
+              Notice · {categoryShort(n.category)}
+              {n.place_hint && ` · ${n.place_hint}`}
+            </div>
           </Tooltip>
         </Marker>
       ))}
