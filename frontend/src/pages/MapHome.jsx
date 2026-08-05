@@ -20,7 +20,14 @@ export default function MapHome() {
   const [category, setCategory] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  // Which event the map is pointed at. `seq` increments on every click so
+  // tapping the same row twice flies there twice — an id alone wouldn't change.
+  const [focus, setFocus] = useState(null);
   const mapRef = useRef(null);
+
+  const focusOnMap = useCallback((id) => {
+    setFocus((current) => ({ id, seq: (current?.seq ?? 0) + 1 }));
+  }, []);
   const { data: interests } = useApi(() => api.get("/api/interests"));
 
   const fetchEvents = useCallback(
@@ -87,6 +94,7 @@ export default function MapHome() {
         center={center}
         events={events}
         notices={showNotices ? notices : []}
+        focus={focus}
         onReady={(map) => {
           mapRef.current = map;
         }}
@@ -146,8 +154,19 @@ export default function MapHome() {
 
           <ul className="event-list">
             {events.map((ev) => (
-              <li key={ev.id}>
-                <Link to={`/events/${ev.id}`} className="event-list-item">
+              <li
+                key={ev.id}
+                className={focus?.id === ev.id ? "event-row selected" : "event-row"}
+              >
+                {/* The row itself moves the map rather than navigating — the
+                    list is how you look around. "Details" is the way out to the
+                    event's own page, kept explicit so it stays discoverable. */}
+                <button
+                  type="button"
+                  className="event-list-item"
+                  aria-pressed={focus?.id === ev.id}
+                  onClick={() => focusOnMap(ev.id)}
+                >
                   <span className={`dot dot-${ev.kind}`} />
                   <span className="event-list-body">
                     <strong>{ev.title}</strong>
@@ -157,6 +176,13 @@ export default function MapHome() {
                       {ev.distance_m != null && ` · ${formatDistance(ev.distance_m)}`}
                     </span>
                   </span>
+                </button>
+                <Link
+                  to={`/events/${ev.id}`}
+                  className="event-row-details"
+                  aria-label={`Open ${ev.title}`}
+                >
+                  Details
                 </Link>
               </li>
             ))}

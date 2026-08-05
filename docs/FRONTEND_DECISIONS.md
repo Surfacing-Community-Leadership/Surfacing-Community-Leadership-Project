@@ -236,6 +236,27 @@ expose something the UI ideally wants; I worked around them and noted each.
   permanent and removes the replies — the hint text says so plainly rather than
   leaving someone to find out.
 
+## Revisions — 2026-08-05 (clicking the map list flies to the pin)
+
+- **A sidebar row now moves the map instead of navigating.** The row became a
+  `<button>`; a compact "Details" link beside it is the way to the event's own
+  page. Keeping that link explicit rather than making it a second-click gesture
+  means the route to an event page stays discoverable.
+- **`Details` sits beside the row, not under it.** On its own line it made all
+  40+ rows noticeably taller — 83px per row versus ~140px. Measured, not guessed.
+- **The fly-to offsets the centre so the panel isn't covering the pin.** The
+  panel is a 358px left column on desktop and a bottom sheet on mobile, so the
+  offset is computed by measuring the live element against the map container
+  rather than hardcoding either number — one code path, and it can't drift out of
+  sync with the CSS. Done in projected pixels at the destination zoom and
+  converted back, since that's the only way to say "200px west of here" as a
+  coordinate. Verified: the pin lands **0px** from the centre of the visible area
+  at both 1440px and 390px.
+- **`focus` carries a sequence number, not just an id.** Clicking the same row
+  twice should fly there twice, and a bare id doesn't change between renders.
+- **The tooltip opens on `moveend`, not immediately.** Opened mid-flight it
+  drifts, because Leaflet is still repositioning.
+
 ## Not done (deferred)
 
 - No automated frontend tests (the backend now has a 200-test pytest suite;
