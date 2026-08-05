@@ -728,18 +728,66 @@ button.danger:hover {
   padding: 0;
   margin: 0;
 }
+/* A row in the map's list. The row is a <button> that moves the map; the
+   "Details" link beside it is the way to the event's own page.
+   Laid out side by side rather than stacked — on its own line, "Details" made
+   every one of 40+ rows noticeably taller for no gain. */
+.event-row {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: var(--r-sm);
+  transition: background 0.12s ease;
+}
+.event-row.selected {
+  background: var(--surface-2);
+  /* A rule in the accent colour, so you can still tell which row is selected
+     after the map has flown somewhere and the hover state is long gone. */
+  box-shadow: inset 3px 0 0 var(--accent);
+}
 .event-list-item {
   display: flex;
   gap: 0.7rem;
   align-items: flex-start;
+  width: 100%;
   padding: 0.8rem 0.7rem;
+  border: none;
   border-radius: var(--r-sm);
+  background: none;
+  font: inherit;
+  text-align: left;
   text-decoration: none;
   color: var(--text);
+  cursor: pointer;
   transition: background 0.12s ease;
 }
 .event-list-item:hover {
   background: var(--surface-2);
+}
+.event-row-details {
+  flex: 0 0 auto;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  padding: 0 0.7rem;
+  border-radius: var(--r-sm);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--muted);
+  text-decoration: none;
+  transition: color 0.12s ease, background 0.12s ease;
+}
+.event-row-details:hover {
+  color: var(--accent);
+  background: var(--surface-2);
+}
+/* The selected row is the one you're most likely to open, so its link steps
+   forward instead of sitting quiet like the rest. */
+.event-row.selected .event-row-details {
+  color: var(--accent);
 }
 .event-list-body {
   display: flex;
