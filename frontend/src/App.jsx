@@ -6,11 +6,15 @@ import Register from "./pages/Register.jsx";
 import Onboarding from "./pages/Onboarding.jsx";
 import Landing from "./pages/Landing.jsx";
 import ConfirmEmail from "./pages/ConfirmEmail.jsx";
+import PublicEvent from "./pages/PublicEvent.jsx";
+import FlyerStudio from "./pages/FlyerStudio.jsx";
 import MapHome from "./pages/MapHome.jsx";
 import EventDetail from "./pages/EventDetail.jsx";
 import CreateEvent from "./pages/CreateEvent.jsx";
 import EditEvent from "./pages/EditEvent.jsx";
 import MyEvents from "./pages/MyEvents.jsx";
+import Board from "./pages/Board.jsx";
+import NoticeDetail from "./pages/NoticeDetail.jsx";
 import Profile from "./pages/Profile.jsx";
 import PublicProfile from "./pages/PublicProfile.jsx";
 import Connections from "./pages/Connections.jsx";
@@ -26,6 +30,9 @@ export default function App() {
       <Route path="/register" element={<Register />} />
       {/* Public: the signed token in the URL is the credential. */}
       <Route path="/confirm-email" element={<ConfirmEmail />} />
+      {/* Public: what a flyer's QR code opens. Short path because it gets
+          printed on paper as readable text alongside the code. */}
+      <Route path="/e/:id" element={<PublicEvent />} />
 
       {/* Authenticated routes share the Layout shell */}
       <Route
@@ -39,8 +46,11 @@ export default function App() {
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/events/new" element={<CreateEvent />} />
         <Route path="/my-events" element={<MyEvents />} />
+        <Route path="/board" element={<Board />} />
+        <Route path="/board/:noticeId" element={<NoticeDetail />} />
         <Route path="/events/:id" element={<EventDetail />} />
         <Route path="/events/:id/edit" element={<EditEvent />} />
+        <Route path="/events/:id/flyer" element={<FlyerStudio />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/profile/:userId" element={<PublicProfile />} />
         <Route path="/connections" element={<Connections />} />

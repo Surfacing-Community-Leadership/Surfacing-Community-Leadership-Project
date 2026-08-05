@@ -5,7 +5,27 @@
    sage accents, Caprasimo display over Figtree, heavy rounding, pill controls.
    Adapted from the "Ours website design system" the team provided.
    ========================================================================== */
-@import url("https://fonts.googleapis.com/css2?family=Caprasimo&family=Figtree:wght@400;500;600;700&display=swap");
+/* Fonts are served from our own origin, not fonts.googleapis.com.
+   Two reasons, in order of how much they matter:
+     1. The flyer export uses html2canvas, which is unreliable with webfonts
+        loaded cross-origin — the exported PNG falls back to a system font, and
+        for a poster the typography IS the design.
+     2. No third-party request on every page load.
+   Latin subsets only (44KB total); Figtree ships as one variable file. */
+@font-face {
+  font-family: "Caprasimo";
+  src: url("/fonts/caprasimo-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Figtree";
+  src: url("/fonts/figtree-variable.woff2") format("woff2-variations");
+  font-weight: 300 900;
+  font-style: normal;
+  font-display: swap;
+}
 
 .org {
   --color-bg: #f5ead8;
@@ -968,6 +988,376 @@
   --color-accent-800: #643312;
 }
 
+/* ---- Notice board -------------------------------------------------------
+   Deliberately flatter and quieter than the event cards: a board is something
+   you skim, not a feed that competes for attention. No counts, no ranking, no
+   emphasis on recency — just the category, the words, and how long it has left. */
+.org .board-intro {
+  max-width: 60ch;
+  margin: -8px 0 24px;
+}
+.org .board-blocked {
+  background: var(--color-accent-100);
+  color: var(--color-accent-800);
+  border-radius: 18px;
+  padding: 14px 18px;
+  font-size: 14px;
+  margin-bottom: 22px;
+}
+/* Three tabs, so they fit a phone without scrolling or wrapping. */
+.org .board-tabs {
+  margin-bottom: 22px;
+}
+
+/* ---- Post of the day ----------------------------------------------------
+   The single piece of prominence on the board. Ranked on stars from the last
+   24 hours only, so it rotates instead of accumulating — a spotlight, not a
+   leaderboard. There is no second or third place anywhere in the UI. */
+.org .potd {
+  margin-bottom: 30px;
+}
+.org .potd-kicker {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-accent-700);
+  margin-bottom: 10px;
+}
+.org .potd-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 28px 30px;
+  border-radius: 30px;
+  border-left: 5px solid var(--nc-accent, var(--color-accent));
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.16s ease;
+}
+.org .potd-card:hover {
+  transform: translateY(-2px);
+  color: inherit;
+}
+.org .potd-card h2 {
+  margin: 0;
+}
+.org .potd-card .notice-body {
+  -webkit-line-clamp: 4;
+}
+.org .potd-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px 14px;
+  /* Wraps rather than clipping the caption at a phone's right edge. */
+  flex-wrap: wrap;
+  margin-top: 12px;
+  font-size: 12px;
+}
+
+/* ---- Stars --------------------------------------------------------------
+   A count, never a list of names. Nothing in this component or its API can
+   reveal who starred — that's what separates "this was useful" from a
+   popularity contest. */
+.org .star-btn,
+.star-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border: 1px solid var(--color-divider);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-neutral-700);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+}
+.org .star-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent-700);
+}
+.org .star-btn.on {
+  background: var(--color-accent-100);
+  border-color: var(--color-accent);
+  color: var(--color-accent-800);
+}
+.org .star-lg {
+  padding: 8px 16px;
+  font-size: 15px;
+}
+.org .star-count {
+  font-variant-numeric: tabular-nums;
+}
+.org .board-empty {
+  padding: 28px 0;
+}
+.org .allowance {
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+/* Pages, not infinite scroll. Reaching the end of a page is a natural place to
+   stop reading, which is the point of a board you visit rather than a feed. */
+.org .board-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 26px;
+}
+.org .board-pager .muted {
+  font-size: 13px;
+  min-width: 5.5em;
+  text-align: center;
+}
+
+/* One post per row. A post is something you read, so it gets the full column
+   width instead of being clipped into a tile — the same shape as the highlight
+   above it, minus the tint that marks that one out. */
+.org .board-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.org .notice-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 26px 28px;
+  background: var(--color-surface);
+  /* A rule in the type's colour does the work a coloured background would,
+     without turning the board into a set of traffic lights. */
+  border: 0;
+  border-left: 5px solid var(--nc-accent, var(--color-accent-200));
+  border-radius: 26px;
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.16s ease;
+}
+.org .notice-card:hover {
+  transform: translateY(-2px);
+  color: inherit;
+}
+.org .notice-card h3 {
+  margin: 0;
+  font-size: clamp(20px, 2.1vw, 26px);
+}
+.org .notice-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.org .notice-body {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--color-neutral-800);
+  /* Three lines on the board; the whole thing on the notice's own page. So a
+     wordy notice can't shout down a short one. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.org .notice-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 12px;
+  color: var(--color-neutral-700);
+}
+.org .notice-meta a {
+  color: inherit;
+}
+.org .notice-verified {
+  color: var(--color-accent-2-700);
+  font-weight: 700;
+}
+.org .notice-replies {
+  font-weight: 700;
+  color: var(--color-accent-700);
+}
+
+/* Type accents. A giveaway leans sage (something is on offer); a loss or a
+   question leans terracotta (somebody needs something); the two org-only kinds
+   take the warm ochre that volunteer work already uses. */
+.org .nc-giveaway {
+  --nc-accent: var(--color-accent-2);
+}
+.org .nc-lost_found,
+.org .nc-question {
+  --nc-accent: var(--color-accent);
+}
+.org .nc-announcement,
+.org .nc-service_change {
+  --nc-accent: #a8762b;
+}
+.org .nc-news,
+.org .nc-shoutout,
+.org .nc-blog {
+  --nc-accent: var(--color-neutral-400, #b7ab95);
+}
+.org .tag-giveaway {
+  background: var(--color-accent-2-100);
+  color: var(--color-accent-2-800);
+}
+.org .tag-lost_found,
+.org .tag-question {
+  background: var(--color-accent-100);
+  color: var(--color-accent-800);
+}
+.org .tag-announcement,
+.org .tag-service_change {
+  background: #f5e6c8;
+  color: #6b4a15;
+}
+/* The read-and-know types share a neutral treatment: they're for reading, not
+   for acting on, and shouldn't compete with the giveaways and questions. */
+.org .tag-news,
+.org .tag-shoutout,
+.org .tag-blog {
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-800);
+}
+/* The municipal/institutional marker on a verified organization's post. */
+.org .tag-official {
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+
+/* The compose form, tinted by category the same way the event form is. */
+.org .notice-form {
+  background: color-mix(in srgb, var(--color-accent) 7%, var(--color-surface));
+  border-radius: 30px;
+  padding: 26px 28px;
+  margin-bottom: 26px;
+}
+.org .notice-form h2 {
+  margin-top: 0;
+}
+.org .notice-form.form-giveaway {
+  --color-accent: var(--color-accent-2);
+  --color-accent-600: var(--color-accent-2-600);
+  --color-accent-700: var(--color-accent-2-700);
+  --color-accent-100: var(--color-accent-2-100);
+  --color-accent-200: var(--color-accent-2-200);
+  --color-accent-800: var(--color-accent-2-800);
+}
+.org .notice-form.form-announcement,
+.org .notice-form.form-service_change {
+  --color-accent: #a8762b;
+  --color-accent-600: #8a5f1f;
+  --color-accent-700: #6b4a15;
+  --color-accent-100: #f8eed8;
+  --color-accent-200: #f0dcb4;
+  --color-accent-800: #55390f;
+}
+.org .notice-form .alert {
+  --color-accent: #c67139;
+  --color-accent-100: #fff2eb;
+  --color-accent-800: #643312;
+}
+
+/* One notice's own page. */
+.org .notice-detail {
+  background: var(--color-surface);
+  border-left: 4px solid var(--nc-accent, var(--color-accent-200));
+  border-radius: 26px;
+  padding: 26px 28px;
+  margin: 16px 0 26px;
+}
+.org .notice-detail h1 {
+  margin: 12px 0;
+}
+.org .notice-detail-body {
+  white-space: pre-wrap;
+  line-height: 1.65;
+  margin: 0 0 18px;
+}
+.org .notice-owner-bar {
+  border-top: 1px solid var(--color-divider);
+  padding-top: 20px;
+  margin-bottom: 28px;
+}
+.org .notice-replies-head {
+  margin-bottom: 4px;
+}
+.org .notice-reply {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 18px 20px;
+}
+.org .notice-reply p {
+  margin: 0;
+}
+.org .notice-reply-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.org .notice-reply-form {
+  background: var(--color-surface);
+  border-radius: 26px;
+  padding: 24px 26px;
+}
+.org .notice-reply-form h2 {
+  margin-top: 0;
+}
+.org .notice-reply-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 12px;
+}
+.org .notice-sent {
+  background: var(--color-accent-2-100);
+  color: var(--color-accent-2-800);
+  border-radius: 14px;
+  padding: 10px 14px;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+.org .notice-closed {
+  background: var(--color-surface);
+  border-radius: 26px;
+  padding: 24px 26px;
+}
+.org .notice-report {
+  margin-top: 22px;
+  font-size: 13px;
+}
+.org .notice-card-foot {
+  margin-top: 2px;
+}
+.org .notice-detail-foot {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-divider);
+  font-size: 12px;
+}
+.org .notice-inquiry-toggle {
+  margin-top: 14px;
+  font-size: 13px;
+}
+/* A longer piece gets a tighter preview on the board than a giveaway does, so
+   one wordy post can't dominate the grid. */
+.org .notice-body.clamp-2 {
+  -webkit-line-clamp: 2;
+}
+
 /* ---- Auth split-screen (Login / Register) ------------------------------ */
 .auth-split {
   min-height: 100vh;
@@ -1101,5 +1491,265 @@
   .org .card {
     padding: 20px;
     border-radius: 24px;
+  }
+}
+
+/* ---- The flyer ----------------------------------------------------------
+   A piece of paper, not a screen: fixed pixel dimensions (A5 at 150dpi) and
+   absolute type sizes, so what exports matches what's previewed.
+
+   Every value here is a plain colour or a self-hosted font. No gradients with
+   images, no external assets — html2canvas taints the canvas on the first
+   cross-origin resource it meets, and a tainted canvas exports blank. */
+.flyer {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: 64px 60px;
+  background: #f5ead8;
+  color: #201e1d;
+  font-family: var(--font-body);
+}
+/* The headline block grows, so the whitespace collects as one deliberate band
+   between the blurb and the rule. The facts then sit anchored just above the QR
+   footer — content at top and bottom, quiet space in the middle. Centring the
+   facts instead left awkward gaps on both sides of a short list. */
+.flyer-top {
+  flex: 1 1 auto;
+}
+.flyer-kicker {
+  display: inline-block;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #b2622d;
+  margin-bottom: 26px;
+}
+.flyer-headline {
+  font-family: var(--font-heading);
+  font-size: 74px;
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+  margin: 0 0 26px;
+  /* Long words in a big display face will otherwise run off the page edge. */
+  overflow-wrap: break-word;
+}
+.flyer-blurb {
+  font-size: 27px;
+  line-height: 1.45;
+  margin: 0;
+  color: #474238;
+}
+.flyer-rule {
+  height: 5px;
+  background: #c67139;
+  margin: 40px 0;
+  flex: 0 0 auto;
+}
+.flyer-facts {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+.flyer-fact {
+  display: grid;
+  grid-template-columns: 132px 1fr;
+  align-items: baseline;
+  gap: 20px;
+}
+.flyer-fact-label {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #82796a;
+}
+.flyer-fact-value {
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.25;
+  overflow-wrap: break-word;
+}
+.flyer-foot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  padding-top: 36px;
+  border-top: 2px solid #dcd3c4;
+}
+.flyer-qr {
+  flex: 0 0 auto;
+  padding: 12px;
+  background: #ffffff;
+  border-radius: 10px;
+  line-height: 0;
+}
+.flyer-foot-words {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 19px;
+  color: #474238;
+  min-width: 0;
+}
+.flyer-foot-words strong {
+  font-size: 25px;
+  font-weight: 700;
+}
+.flyer-foot-words span {
+  overflow-wrap: break-word;
+}
+.flyer-brand {
+  margin-top: 6px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #b2622d;
+}
+
+/* ---- Flyer studio ------------------------------------------------------- */
+.org .flyer-start {
+  background: var(--color-surface);
+  border-radius: 30px;
+  padding: 32px 34px;
+  max-width: 620px;
+}
+.org .flyer-start h2 {
+  margin-top: 0;
+}
+.org .flyer-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 420px;
+  gap: 40px;
+  align-items: start;
+}
+.org .flyer-controls h2 {
+  margin-bottom: 6px;
+}
+.org .flyer-export-head {
+  margin-top: 34px;
+  padding-top: 26px;
+  border-top: 1px solid var(--color-divider);
+}
+.org .copy-option {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  padding: 18px 20px;
+  border-radius: 20px;
+  border: 1px solid var(--color-divider);
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--font-body);
+  margin-bottom: 12px;
+}
+.org .copy-option:hover {
+  background: var(--color-surface);
+  border-color: var(--color-accent);
+}
+.org .copy-option.on {
+  background: var(--color-accent-100);
+  border-color: var(--color-accent);
+}
+.org .copy-option strong {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.org .copy-option span {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--color-neutral-700);
+}
+/* The preview box reserves the scaled-down height; the flyer inside keeps its
+   real pixel size so the export is unaffected by this transform. */
+.org .flyer-preview {
+  overflow: hidden;
+  border-radius: 18px;
+  box-shadow: var(--shadow-lg);
+  height: calc(1240px * (420 / 874));
+}
+.org .flyer-scale {
+  transform-origin: top left;
+}
+
+/* ---- The public page a flyer's QR opens -------------------------------- */
+.org.public-event,
+.org .public-event {
+  min-height: 100vh;
+  background: var(--color-bg);
+  padding: 40px 20px 80px;
+}
+.org .public-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+  margin-bottom: 30px;
+  text-decoration: none;
+  color: var(--color-text);
+}
+.org .public-brand .wordmark {
+  font-family: var(--font-heading);
+  font-size: 24px;
+}
+.org .public-card {
+  max-width: 620px;
+  margin: 0 auto;
+  background: var(--color-surface);
+  border-radius: 30px;
+  padding: 36px 34px;
+}
+.org .public-card h1 {
+  margin: 14px 0 24px;
+}
+.org .public-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 0 0 24px;
+}
+.org .public-facts dt {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-neutral-700);
+  margin-bottom: 2px;
+}
+.org .public-facts dd {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+.org .public-description {
+  white-space: pre-wrap;
+  line-height: 1.6;
+  padding-top: 22px;
+  border-top: 1px solid var(--color-divider);
+}
+.org .public-cta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 28px;
+}
+.org .public-footnote {
+  margin: 22px 0 0;
+  font-size: 13px;
+}
+
+@media (max-width: 900px) {
+  .org .flyer-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .org .flyer-preview {
+    order: -1;
   }
 }

@@ -34,6 +34,19 @@ class Settings(BaseSettings):
     google_client_id: str | None = None
     google_client_secret: str | None = None
 
+    # --- flyer copy (Gemini) ----------------------------------------------
+    # Server-side only. The key must never reach the browser: the frontend
+    # calls our endpoint, our endpoint calls Gemini. Unset is a supported
+    # state — the flyer still works, on templated copy built from the event's
+    # own fields, so nothing breaks when the key is missing or the free tier
+    # is exhausted.
+    gemini_api_key: str | None = None
+    gemini_model: str = "gemini-2.0-flash"
+    # Generations per person per day. A guard on the free tier, not a
+    # monetisation lever — one enthusiastic host shouldn't be able to spend
+    # everyone else's quota.
+    flyer_daily_limit: int = 10
+
     @field_validator("database_url")
     @classmethod
     def _normalize_database_url(cls, v: str) -> str:

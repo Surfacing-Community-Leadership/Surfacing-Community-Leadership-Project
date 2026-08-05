@@ -258,6 +258,39 @@ p {
   border-radius: 999px;
 }
 
+/* ---- Create button ------------------------------------------------------
+   Creating something is an action, not a destination, so it floats instead of
+   taking a tab. z-index sits above the map's panel (550) but below the nav
+   rail (1100), so the bar always wins a fight over the same pixels. */
+.fab {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 1050;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.85rem 1.15rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  box-shadow: 0 10px 26px rgba(43, 35, 24, 0.42);
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+.fab:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 32px rgba(43, 35, 24, 0.5);
+  color: var(--on-accent);
+}
+.fab svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2.4;
+}
+
 /* ---- Mobile top bar (hidden on desktop) --------------------------------- */
 .mtop {
   display: none;
@@ -647,6 +680,27 @@ button.danger:hover {
   padding: 0.8rem 1.05rem;
   border-bottom: 1px solid var(--line);
 }
+/* Board notices are a separate layer from the events, so they get their own
+   switch rather than joining the event-kind select — they aren't a kind of
+   event, and they never enter the "spots nearby" list. */
+.map-notice-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.05rem;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.8rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+.map-notice-toggle input {
+  width: auto;
+  margin: 0;
+}
+.map-notice-toggle .link-button {
+  margin-left: auto;
+  font-size: 0.78rem;
+}
 .map-filters select {
   flex: 1;
   min-width: 130px;
@@ -674,18 +728,66 @@ button.danger:hover {
   padding: 0;
   margin: 0;
 }
+/* A row in the map's list. The row is a <button> that moves the map; the
+   "Details" link beside it is the way to the event's own page.
+   Laid out side by side rather than stacked — on its own line, "Details" made
+   every one of 40+ rows noticeably taller for no gain. */
+.event-row {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: var(--r-sm);
+  transition: background 0.12s ease;
+}
+.event-row.selected {
+  background: var(--surface-2);
+  /* A rule in the accent colour, so you can still tell which row is selected
+     after the map has flown somewhere and the hover state is long gone. */
+  box-shadow: inset 3px 0 0 var(--accent);
+}
 .event-list-item {
   display: flex;
   gap: 0.7rem;
   align-items: flex-start;
+  width: 100%;
   padding: 0.8rem 0.7rem;
+  border: none;
   border-radius: var(--r-sm);
+  background: none;
+  font: inherit;
+  text-align: left;
   text-decoration: none;
   color: var(--text);
+  cursor: pointer;
   transition: background 0.12s ease;
 }
 .event-list-item:hover {
   background: var(--surface-2);
+}
+.event-row-details {
+  flex: 0 0 auto;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  padding: 0 0.7rem;
+  border-radius: var(--r-sm);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--muted);
+  text-decoration: none;
+  transition: color 0.12s ease, background 0.12s ease;
+}
+.event-row-details:hover {
+  color: var(--accent);
+  background: var(--surface-2);
+}
+/* The selected row is the one you're most likely to open, so its link steps
+   forward instead of sitting quiet like the rest. */
+.event-row.selected .event-row-details {
+  color: var(--accent);
 }
 .event-list-body {
   display: flex;
@@ -765,6 +867,22 @@ button.danger:hover {
 }
 .pin-volunteer {
   border-color: var(--volunteer);
+}
+/* A board notice. Smaller, muted, and a rounded SQUARE rather than a circle —
+   the shape is the signal, so it still reads as "not an event" to someone who
+   can't tell the colours apart. Informational only: nothing here to attend. */
+.pin-notice {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  border-width: 2px;
+  border-color: var(--muted);
+  background: var(--surface);
+  opacity: 0.92;
+}
+.pin-notice .pin-emoji {
+  font-size: 12px;
+  color: var(--muted);
 }
 .pin-tip {
   font-family: var(--f-sans);
@@ -1454,6 +1572,23 @@ button.danger:hover {
     width: 26px;
     height: 3px;
     border-radius: 0 0 3px 3px;
+  }
+
+  /* Clear the tab bar, and shrink to a circle so it doesn't crowd a phone. */
+  .fab {
+    right: 16px;
+    bottom: calc(var(--bar-h) + 16px);
+    padding: 0;
+    width: 54px;
+    height: 54px;
+    justify-content: center;
+  }
+  .fab-label {
+    display: none;
+  }
+  /* On the map the list sheet owns the bottom of the screen, so lift above it. */
+  .fab-map {
+    bottom: calc(var(--bar-h) + 44vh + 22px);
   }
 
   /* Immersive map fills the space between the two bars. */

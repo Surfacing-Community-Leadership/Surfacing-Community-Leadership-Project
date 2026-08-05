@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api/client.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { HeartMark } from "./Logo.jsx";
@@ -56,6 +56,13 @@ const BellIcon = (p) => (
     <path d="M9.5 19a2.5 2.5 0 0 0 5 0" />
   </svg>
 );
+const BoardIcon = (p) => (
+  <svg {...ico} className={p.className}>
+    <rect x="3.5" y="5" width="17" height="15" rx="2" />
+    <path d="M7 9.5h6M7 13h10M7 16.5h4" />
+    <path d="M12 2.5v2.5" />
+  </svg>
+);
 const OutIcon = (p) => (
   <svg {...ico} className={p.className}>
     <path d="M15 4h3.5a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H15" />
@@ -103,13 +110,34 @@ function ConfirmEmailNotice() {
   );
 }
 
+// Destinations only. Creating something is an action rather than a place, so it
+// lives in the floating button below — which is also what frees the fifth slot
+// for the board without cramming six tabs into a phone-width bar.
 const NAV = [
   { to: "/map", label: "Map", Icon: MapIcon },
-  { to: "/events/new", label: "Create", Icon: PlusIcon },
+  { to: "/board", label: "Board", Icon: BoardIcon },
   { to: "/my-events", label: "Events", Icon: CalIcon },
   { to: "/connections", label: "People", Icon: PeopleIcon },
   { to: "/profile", label: "Profile", Icon: PersonIcon },
 ];
+
+// Routes that are already a creation or setup flow, where the button would just
+// point at the page you're on.
+const NO_FAB = ["/events/new", "/onboarding"];
+
+function CreateButton() {
+  const { pathname } = useLocation();
+  if (NO_FAB.includes(pathname) || pathname.endsWith("/edit")) return null;
+  // On a phone the map's list sheet occupies the bottom of the screen, so the
+  // button lifts above it rather than sitting on top of the sheet.
+  const className = pathname === "/map" ? "fab fab-map" : "fab";
+  return (
+    <Link to="/events/new" className={className} title="Create an event or request">
+      <PlusIcon />
+      <span className="fab-label">Create</span>
+    </Link>
+  );
+}
 
 function railClass({ isActive }) {
   return isActive ? "rail-link active" : "rail-link";
@@ -194,6 +222,8 @@ export default function Layout() {
           <ConfirmEmailNotice />
           <Outlet />
         </main>
+
+        <CreateButton />
       </div>
     </NotificationsProvider>
   );

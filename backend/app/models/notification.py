@@ -27,6 +27,7 @@ NOTIFICATION_TYPES = (
     "connection_accepted",# someone accepted your connection request
     "help_thanks",        # a neighbor you helped said thanks
     "org_event",          # an organization you follow posted something
+    "notice_reply",       # someone answered a notice you posted on the board
 )
 
 
@@ -40,7 +41,7 @@ class Notification(Base):
         CheckConstraint(
             "type IN ('event_invite', 'event_rsvp', 'event_cancelled', "
             "'event_deleted', 'event_message', 'connection_request', "
-            "'connection_accepted', 'help_thanks', 'org_event')",
+            "'connection_accepted', 'help_thanks', 'org_event', 'notice_reply')",
             name="ck_notifications_type",
         ),
         # Newest-first listing and the unread-count both filter by recipient.
@@ -64,6 +65,13 @@ class Notification(Base):
     # falls back to "an event" — instead of silently vanishing from inboxes.
     event_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("events.id", ondelete="SET NULL")
+    )
+    # The board notice it's about (NULL for everything except notice_reply).
+    # CASCADE, not SET NULL like event_id above: an event's notification still
+    # reads sensibly as "an event", but "someone replied to a notice" with no
+    # notice to open is a dead end, so the notification goes with it.
+    notice_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("notices.id", ondelete="CASCADE")
     )
     is_read: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(

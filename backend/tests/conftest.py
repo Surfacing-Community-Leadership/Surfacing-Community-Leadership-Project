@@ -18,6 +18,10 @@ os.environ["COOKIE_SECURE"] = "false"
 # Force the key EMPTY so map-query tests never schedule real network imports
 # (the developer's .env may hold a real key; env vars beat .env values).
 os.environ["TICKETMASTER_API_KEY"] = ""
+# Same reasoning for Gemini: the developer's .env may hold a real key, and no
+# test should ever spend quota or depend on a network call. Tests that need the
+# model path patch it explicitly.
+os.environ["GEMINI_API_KEY"] = ""
 
 import pytest
 from httpx import ASGITransport, AsyncClient
