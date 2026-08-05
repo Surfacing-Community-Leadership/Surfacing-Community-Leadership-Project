@@ -399,6 +399,39 @@ superseded.
   SDK, superseded by the unified one; same capability here, and it avoids adding
   a deprecated dependency to new code.
 
+## Security fix — 2026-08-05 (path traversal in the SPA fallback)
+
+**Severity: high. Found during pre-deploy checks for the flyer feature, before
+the affected code had ever been deployed with a real secret in place.**
+
+- **What was wrong.** The production single-origin server serves the built
+  frontend through a catch-all route, which joined the request path directly onto
+  the dist directory: `candidate = FRONTEND_DIST / full_path`. Starlette decodes
+  percent-escapes but does **not** normalise `..` segments before handing the path
+  to the route, so `GET /..%2f..%2fbackend%2f.env` arrived as the literal string
+  `../../backend/.env` and the file was returned with HTTP 200.
+- **What it exposed.** `SECRET_KEY`, `DATABASE_URL`, `TICKETMASTER_API_KEY`,
+  `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` — readable by anyone, no
+  authentication, in a single request. `SECRET_KEY` signs session cookies and the
+  email-confirmation and OAuth-state tokens, so its disclosure is enough to forge
+  a session for any account.
+- **How it was found.** Not by reading the code. The flyer needs self-hosted fonts
+  served from that same fallback, so the pre-merge check simulated the production
+  single-origin server and probed it — including with `--path-as-is` so curl
+  wouldn't normalise the path on the client. The raw `/../` form is normalised
+  away by the client and looks safe; only the encoded form got through, which is
+  why an eyeball review had missed it.
+- **The fix.** `_safe_static()` resolves both the dist root and the candidate and
+  requires the root to be a parent of the result. Containment after resolution,
+  not string inspection — stripping `..` or rejecting on substring misses
+  encodings, absolute paths and symlinks, all three of which are now tested.
+- **Regression cover.** `tests/test_spa_static.py`, 16 tests. Verified to actually
+  catch the bug: reinstating the old two-line resolution fails 6 of them,
+  including one that goes through the real HTTP stack.
+- **Note for whoever reads this later:** the vulnerable code predates the flyer
+  feature. What the flyer changed is that it made this fallback load-bearing for
+  fonts, which is why it got probed at all.
+
 ## Deferred (known gaps to discuss)
 
 - Rate limiting is in the stack but still not wired.
