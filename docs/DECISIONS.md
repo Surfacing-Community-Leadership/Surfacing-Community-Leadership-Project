@@ -357,6 +357,48 @@ superseded.
 - **Stars and replies survive an edit** untouched, asserted by a test — an edit
   changes the words, not the post's history.
 
+## Revisions — 2026-08-05 (the AI flyer)
+
+- **The feature needed a public event page, which did not exist.** `/events/:id`
+  is behind `ProtectedRoute` and `GET /api/events/{id}` requires a user, so a QR
+  code on a lamppost would have bounced a stranger to the login screen — which
+  defeats the point of a flyer. Added `GET /api/public/events/{id}` and an
+  unauthenticated `/e/:id` route.
+- **That endpoint is the only unauthenticated read of app data in the codebase**,
+  so it is written to be boring: public-visibility events only, a hand-listed
+  response model, and no branch that could widen either. A test asserts the field
+  set *exactly*, so adding a field later fails loudly rather than quietly leaking.
+  It lives in its own router, not under `/api/events`, because a public route
+  sitting beside auth-dependent ones is how you accidentally inherit — or fail to
+  inherit — a dependency.
+- **A help request's address is never public**, regardless of its visibility
+  setting: for a help request the address is somebody's home. A gathering's or a
+  volunteering shift's address *is* served publicly, since a host who chose public
+  visibility and typed a venue wants people to find it. `VENUE_KINDS` draws that
+  line in one place.
+- **Gemini never receives the address at all.** `flyer_copy()` has no parameter
+  for it, so the caller cannot leak one even by mistake. It gets title,
+  description, host display name, when, and neighbourhood.
+- **Private events cannot have a flyer** (409). A flyer's QR points at a publicly
+  readable page, so allowing one would quietly undo the visibility the host chose.
+  The button is hidden in the UI too, but the server is what enforces it.
+- **The feature cannot fail.** No key, a timeout, a quota error, a malformed
+  reply, or an SDK change all land on the same behaviour: templated "mad-libs"
+  copy from the event's own fields, logged for us, HTTP 200 for the user. The
+  `except` is deliberately broad because every one of those cases has the same
+  correct response.
+- **Templated copy does not spend the daily allowance.** Only a real model call
+  is recorded, otherwise an outage on Google's side would burn the quota of every
+  user who tried during it.
+- **The cap is a table, not a counter.** `flyer_generations` survives restarts,
+  is correct across worker processes (an in-process dict would give each worker
+  its own count, making the real limit the cap times the worker count), and
+  doubles as an audit trail. `event_id` is SET NULL rather than CASCADE so
+  deleting an event cannot refund the quota it spent.
+- **`google-genai`, not `google-generativeai`.** The latter is Google's legacy
+  SDK, superseded by the unified one; same capability here, and it avoids adding
+  a deprecated dependency to new code.
+
 ## Deferred (known gaps to discuss)
 
 - Rate limiting is in the stack but still not wired.

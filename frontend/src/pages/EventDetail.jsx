@@ -178,6 +178,17 @@ export default function EventDetail() {
                 <button className="secondary" onClick={() => navigate(`/events/${id}/edit`)}>
                   Edit
                 </button>
+                {/* Only offered where it can actually work: a private event's
+                    flyer would need a public page, which would contradict the
+                    visibility the host chose. The server refuses it too. */}
+                {event.visibility !== "private" && (
+                  <button
+                    className="secondary"
+                    onClick={() => navigate(`/events/${id}/flyer`)}
+                  >
+                    Make a flyer
+                  </button>
+                )}
                 <button className="secondary" onClick={cancelEvent}>
                   Cancel event
                 </button>

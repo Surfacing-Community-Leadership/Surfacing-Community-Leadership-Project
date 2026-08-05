@@ -257,6 +257,37 @@ expose something the UI ideally wants; I worked around them and noted each.
 - **The tooltip opens on `moveend`, not immediately.** Opened mid-flight it
   drifts, because Leaflet is still repositioning.
 
+## Revisions — 2026-08-05 (the AI flyer)
+
+- **Caprasimo and Figtree are now self-hosted** (`public/fonts`, 44KB, latin
+  subsets, Figtree as one variable file) and the cross-origin `@import` from
+  fonts.googleapis.com is gone. The reason is the flyer: html2canvas is
+  unreliable with webfonts loaded cross-origin, and an exported poster that falls
+  back to Georgia is a real quality failure, not a cosmetic one. Verified with
+  `document.fonts.check('16px Caprasimo')` returning true and by looking at the
+  exported PNG.
+- **The flyer template contains no `<img>` at all.** Text, our own CSS, and the
+  QR as inline SVG. html2canvas taints the canvas on the first cross-origin
+  resource it meets, and a tainted canvas exports as a blank rectangle. A check
+  asserts `.flyer img` is empty.
+- **`QRCodeSVG`, not the canvas renderer.** html2canvas rasterises inline SVG
+  reliably; a nested `<canvas>` comes out blank often enough to matter.
+- **The preview transform leaked into the export — caught, then fixed.** The
+  preview shrinks the flyer with `transform: scale(0.48)`, and html2canvas honours
+  that: the first export came out **840×1192 instead of 1748×2480**, i.e. text
+  rasterised at half size and enlarged. The export now neutralises the wrapper's
+  transform for the duration of the capture and passes explicit width/height.
+  Found by checking the PNG's IHDR dimensions, not by looking at it.
+- **`await document.fonts.ready` before rasterising**, or a cold load exports on
+  the fallback face.
+- **html2canvas and jsPDF are dynamically imported.** Together they are ~590KB;
+  nobody who isn't making a flyer should pay for them at first load. They now sit
+  in their own chunks.
+- **Two layout bugs found by looking at the exported file:** the fallback's first
+  option uses the title as the headline, which printed the same words twice (the
+  "What" row is now dropped when they match); and the facts block left a large
+  dead gap, so the headline block grows instead and the facts anchor above the QR.
+
 ## Not done (deferred)
 
 - No automated frontend tests (the backend now has a 200-test pytest suite;
