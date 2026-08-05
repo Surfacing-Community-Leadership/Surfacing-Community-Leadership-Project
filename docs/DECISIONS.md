@@ -357,6 +357,81 @@ superseded.
 - **Stars and replies survive an edit** untouched, asserted by a test — an edit
   changes the words, not the post's history.
 
+## Revisions — 2026-08-05 (the AI flyer)
+
+- **The feature needed a public event page, which did not exist.** `/events/:id`
+  is behind `ProtectedRoute` and `GET /api/events/{id}` requires a user, so a QR
+  code on a lamppost would have bounced a stranger to the login screen — which
+  defeats the point of a flyer. Added `GET /api/public/events/{id}` and an
+  unauthenticated `/e/:id` route.
+- **That endpoint is the only unauthenticated read of app data in the codebase**,
+  so it is written to be boring: public-visibility events only, a hand-listed
+  response model, and no branch that could widen either. A test asserts the field
+  set *exactly*, so adding a field later fails loudly rather than quietly leaking.
+  It lives in its own router, not under `/api/events`, because a public route
+  sitting beside auth-dependent ones is how you accidentally inherit — or fail to
+  inherit — a dependency.
+- **A help request's address is never public**, regardless of its visibility
+  setting: for a help request the address is somebody's home. A gathering's or a
+  volunteering shift's address *is* served publicly, since a host who chose public
+  visibility and typed a venue wants people to find it. `VENUE_KINDS` draws that
+  line in one place.
+- **Gemini never receives the address at all.** `flyer_copy()` has no parameter
+  for it, so the caller cannot leak one even by mistake. It gets title,
+  description, host display name, when, and neighbourhood.
+- **Private events cannot have a flyer** (409). A flyer's QR points at a publicly
+  readable page, so allowing one would quietly undo the visibility the host chose.
+  The button is hidden in the UI too, but the server is what enforces it.
+- **The feature cannot fail.** No key, a timeout, a quota error, a malformed
+  reply, or an SDK change all land on the same behaviour: templated "mad-libs"
+  copy from the event's own fields, logged for us, HTTP 200 for the user. The
+  `except` is deliberately broad because every one of those cases has the same
+  correct response.
+- **Templated copy does not spend the daily allowance.** Only a real model call
+  is recorded, otherwise an outage on Google's side would burn the quota of every
+  user who tried during it.
+- **The cap is a table, not a counter.** `flyer_generations` survives restarts,
+  is correct across worker processes (an in-process dict would give each worker
+  its own count, making the real limit the cap times the worker count), and
+  doubles as an audit trail. `event_id` is SET NULL rather than CASCADE so
+  deleting an event cannot refund the quota it spent.
+- **`google-genai`, not `google-generativeai`.** The latter is Google's legacy
+  SDK, superseded by the unified one; same capability here, and it avoids adding
+  a deprecated dependency to new code.
+
+## Security fix — 2026-08-05 (path traversal in the SPA fallback)
+
+**Severity: high. Found during pre-deploy checks for the flyer feature, before
+the affected code had ever been deployed with a real secret in place.**
+
+- **What was wrong.** The production single-origin server serves the built
+  frontend through a catch-all route, which joined the request path directly onto
+  the dist directory: `candidate = FRONTEND_DIST / full_path`. Starlette decodes
+  percent-escapes but does **not** normalise `..` segments before handing the path
+  to the route, so `GET /..%2f..%2fbackend%2f.env` arrived as the literal string
+  `../../backend/.env` and the file was returned with HTTP 200.
+- **What it exposed.** `SECRET_KEY`, `DATABASE_URL`, `TICKETMASTER_API_KEY`,
+  `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` — readable by anyone, no
+  authentication, in a single request. `SECRET_KEY` signs session cookies and the
+  email-confirmation and OAuth-state tokens, so its disclosure is enough to forge
+  a session for any account.
+- **How it was found.** Not by reading the code. The flyer needs self-hosted fonts
+  served from that same fallback, so the pre-merge check simulated the production
+  single-origin server and probed it — including with `--path-as-is` so curl
+  wouldn't normalise the path on the client. The raw `/../` form is normalised
+  away by the client and looks safe; only the encoded form got through, which is
+  why an eyeball review had missed it.
+- **The fix.** `_safe_static()` resolves both the dist root and the candidate and
+  requires the root to be a parent of the result. Containment after resolution,
+  not string inspection — stripping `..` or rejecting on substring misses
+  encodings, absolute paths and symlinks, all three of which are now tested.
+- **Regression cover.** `tests/test_spa_static.py`, 16 tests. Verified to actually
+  catch the bug: reinstating the old two-line resolution fails 6 of them,
+  including one that goes through the real HTTP stack.
+- **Note for whoever reads this later:** the vulnerable code predates the flyer
+  feature. What the flyer changed is that it made this fallback load-bearing for
+  fonts, which is why it got probed at all.
+
 ## Deferred (known gaps to discuss)
 
 - Rate limiting is in the stack but still not wired.

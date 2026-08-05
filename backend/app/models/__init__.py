@@ -5,6 +5,7 @@ from app.models.block import Block
 from app.models.community import Community
 from app.models.connection import Connection
 from app.models.event import Event
+from app.models.flyer_generation import FlyerGeneration
 from app.models.help_thanks import HelpThanks
 from app.models.import_area import ImportArea
 from app.models.interest import Interest, user_interests
@@ -26,6 +27,7 @@ __all__ = [
     "Event",
     "EventMessage",
     "EventParticipant",
+    "FlyerGeneration",
     "HelpThanks",
     "ImportArea",
     "Interest",

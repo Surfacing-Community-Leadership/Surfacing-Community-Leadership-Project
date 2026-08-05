@@ -69,8 +69,15 @@ If we succeed, people need the app less and less over time. That's the point.
   (In the code the board is still `notices`/`Notice`; only the interface was
   renamed.)
 
-Still planned: an AI layer that guides event creation and surfaces relevant
-local happenings.
+- **AI flyers** — a host can turn an event into a printable poster: real event
+  details, an AI-written headline you pick from a few options, and a QR code
+  pointing at a public page a stranger can read without an account. The AI copy
+  is generated server-side (the key never reaches the browser) and falls back to
+  templated copy from the event's own words if it's unavailable, so the feature
+  never breaks. Export is entirely in the browser, so it costs nothing to run.
+
+Still planned: an AI chatbot that guides event creation, AI recommendations, and
+feedback-form summaries.
 
 ## Tech stack
 

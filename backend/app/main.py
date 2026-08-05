@@ -21,6 +21,7 @@ from app.routers import (
     communities,
     connections,
     events,
+    flyers,
     geocode,
     interests,
     messages,
@@ -90,6 +91,7 @@ app.include_router(profiles.router)
 app.include_router(communities.router)
 app.include_router(interests.router)
 app.include_router(events.router)
+app.include_router(flyers.router)
 app.include_router(geocode.router)
 app.include_router(participants.router)
 app.include_router(connections.router)
@@ -129,13 +131,39 @@ if (FRONTEND_DIST / "index.html").is_file():
     # Prefixes owned by the backend — never hand these to the SPA fallback.
     _RESERVED = ("api", "media", "admin", "health", "docs", "redoc", "openapi.json")
 
+    def _safe_static(full_path: str) -> Path | None:
+        """Resolve `full_path` inside FRONTEND_DIST, or None if it escapes.
+
+        Necessary because Starlette does NOT decode-then-normalise the path
+        before handing it over: a request for `/..%2f..%2fbackend%2f.env`
+        arrives here as the literal string `../../backend/.env`, and joining
+        that onto FRONTEND_DIST walks straight out of the served directory. The
+        earlier version of this function served that file — which meant SECRET_KEY,
+        DATABASE_URL and the OAuth secrets were readable by anyone.
+
+        Resolving both sides and comparing is the check that actually holds:
+        stripping ".." or rejecting on substring both miss encodings, symlinks
+        and absolute paths.
+        """
+        if not full_path:
+            return None
+        try:
+            root = FRONTEND_DIST.resolve(strict=True)
+            candidate = (root / full_path).resolve()
+        except (OSError, RuntimeError, ValueError):
+            return None
+        if candidate == root or root not in candidate.parents:
+            return None
+        return candidate if candidate.is_file() else None
+
     @app.get("/{full_path:path}")
     async def spa_fallback(full_path: str):
         if full_path.startswith(_RESERVED):
             raise HTTPException(status_code=404, detail="Not found")
-        # A real static file (favicon, etc.) → serve it; anything else is a
-        # client-side route, so return index.html and let React Router handle it.
-        candidate = FRONTEND_DIST / full_path
-        if full_path and candidate.is_file():
-            return FileResponse(candidate)
+        # A real static file inside the built frontend (favicon, /fonts/…) →
+        # serve it; anything else is a client-side route, so return index.html
+        # and let React Router handle it.
+        static = _safe_static(full_path)
+        if static is not None:
+            return FileResponse(static)
         return FileResponse(FRONTEND_DIST / "index.html")
