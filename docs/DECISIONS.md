@@ -462,6 +462,81 @@ the affected code had ever been deployed with a real secret in place.**
   thanks (each clearing `MIN_REFLECTION_WORDS`), giving profiles like
   "hosted=2 attended=1 helped=1".
 
+## Revisions — 2026-08-05, round three (the guide: an AI chat that starts an event)
+
+A chat that walks somebody through creating an event or a help request, so that
+taking the first step feels easy. Same Gemini key as the flyer, deliberately not
+the same budget.
+
+**The one decision everything else follows from: the guide never writes.**
+It returns a `Draft` — words on a screen. The person lands on the ordinary
+Create Event form with the fields already filled in, reads it, and presses the
+ordinary button. `POST /api/events` remains the single write path into `events`,
+so the org-only volunteer kind, community membership and the future-start rule
+keep being enforced in one place. A conversational endpoint that created events
+directly would have had to re-implement all of that, and would eventually have
+contradicted it.
+
+- **It cannot produce an address, by construction.** `Draft` has no `address`
+  field and no coordinates — the same discipline as `flyer_copy()` having no
+  address parameter. The leak is impossible rather than merely discouraged. A
+  test asserts the absence of those fields on both the dataclass and the API
+  schema, because if someone adds one, the prompt becomes the only thing between
+  a model guess and a map pin. For a help request the address is somebody's home.
+- **It does not pick dates either**, for a different reason: "Saturday" is
+  ambiguous across timezones and week boundaries. The person's own words are kept
+  in `timing_hint` / `place_hint` and rendered *beside* the real fields as
+  reminders — notes, never values. A suggested duration becomes a real end time
+  only after the person picks a real start time.
+- **Nothing the model returns is trusted.** `kind` is checked against what the
+  account may actually post (a person cannot host a volunteer shift), `tag_slug`
+  against the slugs really in the database, numbers against sane bounds, text
+  against length caps. A field the model got wrong becomes absent, never wrong.
+  The model's own `ready` flag is only believed when the draft backs it up.
+- **The transcript is never stored.** It lives in the browser's sessionStorage
+  and is posted back each turn, so nothing about an idea somebody thought better
+  of ends up in our database. That makes it untrusted input: the turn count and
+  message length are enforced server-side, not assumed of the client.
+- **Its own budget table.** `assistant_turns`, not `flyer_generations`: a flyer
+  is one model call, a conversation is five or ten, so a shared counter would
+  mean talking one event through ate a week of somebody's flyers.
+- **It is allowed to be unavailable.** Unlike the flyer there is no templated
+  fallback — you cannot fake a conversation. So the guide raises, the API answers
+  503, and `GET /api/assistant/status` lets the UI hide the entry point entirely
+  when there is no key. The ordinary form has never needed this feature.
+- **Out of scope is part of the product.** The prompt declines business
+  advertising, political campaigning, and patrols or crime-watch — the same line
+  the board draws by having no crime-and-safety category — and says so plainly
+  without lecturing, offering a neighbourly alternative instead. Verified against
+  the live model for all three.
+- **On prompt injection:** the transcript can say anything, including
+  instructions to us. It matters little here, because the worst case is a draft
+  with silly words in it that the person reads and edits before pressing Create.
+  Nothing the model returns is executed or stored.
+
+### Two bugs in the existing flyer feature, found by running this against the real API
+
+- **`gemini-2.0-flash` free-tier quota is now a hard zero.** Every flyer in
+  production has been silently falling back to templated copy — working, but not
+  what anyone meant, and invisible because the fallback is deliberately quiet.
+  The default is now `gemini-flash-latest`, an alias rather than a pinned
+  version, so it follows whatever the free tier actually serves.
+- **Thinking tokens are spent from `max_output_tokens`.** The current models
+  think before answering; at 800 tokens a trivial prompt burned 445 on thoughts
+  and returned JSON cut off mid-string, which from the outside looks exactly like
+  the model returning garbage. Both call sites now share `app/core/gemini.py`
+  with a generous ceiling, an explicit check for truncation (so a future
+  recurrence names itself), and a request for minimal thinking with a retry for
+  models that reject the parameter.
+- **A rate limit is not the same failure as an outage.** The free tier allows 5
+  requests/minute and 20/day *project-wide*, and one conversation is several
+  calls, so being throttled is the ordinary case rather than the exotic one.
+  `GeminiBusy` / `AssistantBusy` produce "the guide is busy for a moment — send
+  that again shortly", which is true and actionable, instead of sending somebody
+  away from a feature that is about to work. Neither failure charges the budget:
+  an outage on Google's side must not eat the allowance of everyone who tried
+  during it.
+
 ## Deferred (known gaps to discuss)
 
 - Rate limiting is in the stack but still not wired.
@@ -470,6 +545,12 @@ the affected code had ever been deployed with a real secret in place.**
 - `scripts/purge_notices.py` exists but nothing runs it — it needs a scheduler,
   same as the access-token cleanup above. Until then expired notices are hidden
   by the query filter and simply accumulate as rows.
+- **The Gemini free tier is the binding constraint on the guide, not our code.**
+  20 requests/day project-wide means roughly three or four guided conversations a
+  day across all users. `assistant_daily_limit` (40/user) is far above that
+  ceiling and is a guard against one person, not against the quota. A demo that
+  needs the guide to work reliably needs billing enabled on the Google Cloud
+  project; the feature degrades honestly either way.
 - The Knowledge & Skills Resource Pool is specified but unbuilt: two of its three
   pillar categories were never named, and its scope (neighbourhood vs city-wide),
   edit model (author-owned vs wiki) and the meaning of its "verified" badge are

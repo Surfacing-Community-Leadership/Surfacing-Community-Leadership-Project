@@ -1753,3 +1753,135 @@
     order: -1;
   }
 }
+
+/* ---- The guide — a short chat that ends at the ordinary form ------------- */
+.org .guide-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 30px;
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .org .guide-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.org .guide-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+/* Tall enough that the conversation has somewhere to live, capped so the page
+   never grows past a screen and the compose box stays where the hand is. */
+.org .guide-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 260px;
+  max-height: 46vh;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+.org .guide-msg {
+  margin: 0;
+  max-width: 84%;
+  padding: 12px 16px;
+  border-radius: 18px;
+  font-size: 15px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.org .guide-msg-them {
+  align-self: flex-start;
+  background: var(--color-neutral-100);
+  border-bottom-left-radius: 6px;
+}
+.org .guide-msg-you {
+  align-self: flex-end;
+  background: var(--color-accent-200);
+  border-bottom-right-radius: 6px;
+}
+.org .guide-thinking {
+  color: var(--color-neutral-600);
+  font-style: italic;
+}
+.org .guide-starters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.org .guide-compose {
+  display: flex;
+  gap: 10px;
+}
+.org .guide-compose input {
+  flex: 1;
+  min-width: 0;
+}
+.org .guide-done {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.org .guide-done-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.org .guide-draft {
+  position: sticky;
+  top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.org .guide-draft h2 {
+  margin: 0;
+}
+.org .guide-draft-rows {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.org .guide-draft-rows dt {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-neutral-600);
+  margin-bottom: 3px;
+}
+.org .guide-draft-rows dd {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.org .guide-unavailable {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  max-width: 560px;
+}
+/* The guide's words echoed back inside the real form, so somebody can see that
+   what they said survived the handover. A note, never a value. */
+.org .guide-echo {
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--color-neutral-100);
+  border-left: 3px solid var(--color-accent-400);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-neutral-800);
+}
+.org .guide-echo-lead {
+  margin-top: 14px;
+}
+.org .guide-offer {
+  margin-top: 14px;
+  font-size: 15px;
+  color: var(--color-neutral-700);
+}

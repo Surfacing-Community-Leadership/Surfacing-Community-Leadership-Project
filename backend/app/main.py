@@ -16,6 +16,7 @@ from app.core.auth import AUTH_COOKIE_NAME, CSRF_COOKIE_NAME
 from app.core.config import settings
 from app.core.database import get_db
 from app.routers import (
+    assistant,
     auth,
     blocks,
     communities,
@@ -85,6 +86,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 
+app.include_router(assistant.router)
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(profiles.router)

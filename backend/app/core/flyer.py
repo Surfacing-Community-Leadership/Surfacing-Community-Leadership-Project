@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from app.core.config import settings
+from app.core.gemini import generate_json
 
 log = logging.getLogger("ours.flyer")
 
@@ -207,23 +208,10 @@ async def flyer_copy(
     )
 
     try:
-        from google import genai
-        from google.genai import types
-
-        client = genai.Client(api_key=settings.gemini_api_key)
-        response = await client.aio.models.generate_content(
-            model=settings.gemini_model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                temperature=0.9,
-                max_output_tokens=600,
-                # A hard server-side deadline, so a hanging call can't hold a
-                # request open indefinitely. Milliseconds.
-                http_options=types.HttpOptions(timeout=TIMEOUT_SECONDS * 1000),
-            ),
+        raw = await generate_json(
+            prompt, temperature=0.9, timeout_seconds=TIMEOUT_SECONDS
         )
-        options = _parse(response.text or "")
+        options = _parse(raw)
     except Exception as exc:
         # Deliberately broad: an unconfigured key, a quota error, a timeout, a
         # malformed reply and an SDK change all have the same correct response —
