@@ -41,11 +41,24 @@ class Settings(BaseSettings):
     # own fields, so nothing breaks when the key is missing or the free tier
     # is exhausted.
     gemini_api_key: str | None = None
-    gemini_model: str = "gemini-2.0-flash"
+    # An alias, not a pinned version, and that is the point: `gemini-2.0-flash`
+    # was the default here until Google set its free-tier quota to a hard zero,
+    # at which point every flyer in production silently fell back to templated
+    # copy — working, but not what anyone meant. An alias follows whatever the
+    # free tier currently serves. Override in the environment to pin a version.
+    gemini_model: str = "gemini-flash-latest"
     # Generations per person per day. A guard on the free tier, not a
     # monetisation lever — one enthusiastic host shouldn't be able to spend
     # everyone else's quota.
     flyer_daily_limit: int = 10
+
+    # --- the guide (Gemini, same key) -------------------------------------
+    # The chat that walks someone through starting an event. Shares the key
+    # above but NOT the counter: a flyer is one call, a conversation is five
+    # or ten, so a shared budget would mean talking one event through ate a
+    # week of flyers. Unset key disables the guide entirely — the entry point
+    # is hidden and the ordinary form is untouched.
+    assistant_daily_limit: int = 40
 
     @field_validator("database_url")
     @classmethod

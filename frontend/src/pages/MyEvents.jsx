@@ -50,7 +50,9 @@ export default function Events() {
         {data.created.length === 0 ? (
           <p className="muted">
             You haven't created anything yet.{" "}
-            <Link to="/events/new">Create an event or help request</Link>.
+            <Link to="/events/new">Create an event or help request</Link>, or{" "}
+            <Link to="/events/new/guide">talk it through</Link> if you're not sure
+            where to start.
           </p>
         ) : (
           <EventGrid events={data.created} showAdd />
