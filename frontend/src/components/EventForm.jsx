@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../api/client.js";
 import { useApi } from "../hooks/useApi.js";
 import Field from "./Field.jsx";
@@ -15,12 +15,23 @@ function localNow() {
   return new Date(now - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 }
 
+// A Date as a datetime-local input wants it, in the browser's own timezone.
+function localValue(date) {
+  return new Date(date - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
 // Shared create/edit form for events and help requests. The parent owns what
 // "submit" means (POST vs PATCH, where to navigate); this owns fields,
 // validation and payload shape. The form tints itself to its type (sage for a
 // gathering, terracotta for a help request).
+//
+// `hints` are the guide's echo of what somebody said in the chat — "Saturday
+// afternoon", "the little park by the school". They render as notes beside the
+// date picker and the address box and are never used as values: the guide does
+// not choose dates, and it does not place pins.
 export default function EventForm({
   initial = {},
+  hints = {},
   submitLabel = "Save",
   onSubmit,
   lockKind = false,
@@ -52,6 +63,34 @@ export default function EventForm({
   // must never be left holding "help_request".
   if (myProfile && !lockKind && !available.includes(kind)) {
     setKind(available[0]);
+  }
+
+  // A draft from the guide names its category by slug, because the guide is
+  // never told our ids. Resolve it once the real list of interests arrives.
+  //
+  // An effect rather than a check during render: the first version guarded a
+  // render-phase setTagId with a ref, which React does not support — writing a
+  // ref while rendering left the guard already tripped by the time the update
+  // would have applied, and the chip silently never lit up.
+  const draftSlug = initial.tagSlug;
+  useEffect(() => {
+    if (!interests || !draftSlug) return;
+    const match = interests.find((i) => i.slug === draftSlug);
+    if (match) setTagId(match.id);
+    // Depends only on the incoming draft and the list, neither of which changes
+    // again — so this can't fight the person over the chips afterwards.
+  }, [interests, draftSlug]);
+
+  // "About an hour" from the chat becomes a real end time only after the person
+  // has picked a real start time, and only if they haven't set an end already.
+  function pickStart(value) {
+    setStartsAt(value);
+    if (value && !endsAt && initial.durationMinutes) {
+      const start = new Date(value);
+      if (!Number.isNaN(start.getTime())) {
+        setEndsAt(localValue(new Date(start.getTime() + initial.durationMinutes * 60000)));
+      }
+    }
   }
 
   async function handleSubmit(e) {
@@ -129,6 +168,12 @@ export default function EventForm({
         />
       </Field>
 
+      {hints.place && (
+        <p className="guide-echo">
+          You said it'd be at <strong>{hints.place}</strong> — find the exact spot below.
+        </p>
+      )}
+
       <Field
         label="Address"
         hint="Start typing to search; picking a result drops the map pin. Shown only to confirmed attendees."
@@ -156,13 +201,19 @@ export default function EventForm({
         <span className="field-hint">Click the map to fine-tune the exact spot.</span>
       </div>
 
+      {hints.timing && (
+        <p className="guide-echo">
+          You said <strong>{hints.timing}</strong> — pick the exact time below.
+        </p>
+      )}
+
       <div className="field-row">
         <Field label="Starts">
           <input
             type="datetime-local"
             value={startsAt}
             min={minStart}
-            onChange={(e) => setStartsAt(e.target.value)}
+            onChange={(e) => pickStart(e.target.value)}
             required
           />
         </Field>

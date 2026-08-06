@@ -288,6 +288,53 @@ expose something the UI ideally wants; I worked around them and noted each.
   "What" row is now dropped when they match); and the facts block left a large
   dead gap, so the headline block grows instead and the facts anchor above the QR.
 
+## Revisions — 2026-08-05, round three (the guide)
+
+`/events/new/guide` — a chat on the left, a live draft on the right, ending at
+the ordinary Create Event form.
+
+- **The opening message is written in the client.** It costs nothing, appears
+  instantly, and means the model is never called until somebody has actually
+  said something — a page nobody engages with spends no quota at all.
+- **Starter chips instead of a blank box.** The blank page is the problem the
+  feature exists to solve; opening with an empty text field would reproduce it
+  one screen later. Three openers, and they differ for an organization account.
+- **The draft panel is a preview, not a form.** It shows what has been understood
+  so far and says outright that where and when are set by you on the next page.
+  Nothing on this screen can post anything.
+- **The draft travels in router state, not the URL.** It is a couple of
+  paragraphs of somebody's words; it has no business in a history entry or a
+  shareable link.
+- **The transcript lives in sessionStorage.** A refresh keeps your place, closing
+  the tab throws it away.
+- **A failed turn rolls the message back out of the thread** and puts it back in
+  the input, so retrying isn't a duplicate.
+- **The entry point checks first.** `/events/new` only offers "talk it through"
+  when `GET /api/assistant/status` says it's available; a button that always
+  fails is worse than no button.
+- **The guide's words are echoed inside the real form** as tinted notes beside
+  the address box and the date picker ("You said saturday morning — pick the
+  exact time below"), so it's visible that what you said survived the handover,
+  while the fields themselves stay empty for you to fill.
+
+### One bug, and it was mine
+
+`EventForm` resolves the draft's `tag_slug` to a real interest id once the list
+loads. The first version did that during render, guarded by a `useRef` — writing
+a ref while rendering, which React does not support. The guard was already
+tripped by the time the update would have applied, so the category chip silently
+never lit up. Found by driving the flow in a browser and checking for `.chip-on`,
+not by reading the code. It is a `useEffect` now.
+
+### Verified in a real browser (CDP, 1440px)
+
+Whole conversation driven end to end against the live model: the draft panel
+filling in row by row, the handover, and the form arriving with type, title,
+description, capacity and the Gardening chip set — while the address box, the
+map pin and both date fields stayed empty. Picking a start time then produced the
+suggested end time (10:00 → 11:30 for a 90-minute draft). The rate-limited path
+was also seen for real, showing "the guide is busy for a moment".
+
 ## Not done (deferred)
 
 - No automated frontend tests (the backend now has a 200-test pytest suite;

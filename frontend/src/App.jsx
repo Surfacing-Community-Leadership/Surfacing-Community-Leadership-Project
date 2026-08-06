@@ -11,6 +11,7 @@ import FlyerStudio from "./pages/FlyerStudio.jsx";
 import MapHome from "./pages/MapHome.jsx";
 import EventDetail from "./pages/EventDetail.jsx";
 import CreateEvent from "./pages/CreateEvent.jsx";
+import GuidedStart from "./pages/GuidedStart.jsx";
 import EditEvent from "./pages/EditEvent.jsx";
 import MyEvents from "./pages/MyEvents.jsx";
 import Board from "./pages/Board.jsx";
@@ -45,6 +46,7 @@ export default function App() {
         <Route path="/map" element={<MapHome />} />
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/events/new" element={<CreateEvent />} />
+        <Route path="/events/new/guide" element={<GuidedStart />} />
         <Route path="/my-events" element={<MyEvents />} />
         <Route path="/board" element={<Board />} />
         <Route path="/board/:noticeId" element={<NoticeDetail />} />
